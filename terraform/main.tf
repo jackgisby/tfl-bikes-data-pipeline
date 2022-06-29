@@ -47,26 +47,6 @@ resource "google_bigquery_dataset" "dataset" {
   location   = var.region
 }
 
-# VM running airflow via docker to manage batch data processing
-resource "google_compute_instance" "airflow_vm_instance" {
-  name                      = local.airflow_vm
-  machine_type              = "e2-standard-4"
-  allow_stopping_for_update = true
-
-  boot_disk {
-    initialize_params {
-      image = var.vm_image
-      size  = 30
-    }
-  }
-
-  network_interface {
-    network = var.network
-    access_config {
-    }
-  }
-}
-
 # Spark cluster for transforming and loading data
 resource "google_dataproc_cluster" "mulitnode_spark_cluster" {
   name   = local.spark_cluster
@@ -90,7 +70,7 @@ resource "google_dataproc_cluster" "mulitnode_spark_cluster" {
       machine_type  = "e2-standard-2"
       disk_config {
         boot_disk_type    = "pd-ssd"
-        boot_disk_size_gb = 15
+        boot_disk_size_gb = 5
       }
     }
 

@@ -27,12 +27,6 @@ variable "bq_dataset" {
   default = "bikes_data_warehouse"
 }
 
-variable "vm_image" {
-  description = "Ubuntu image for VM"
-  default     = "ubuntu-os-cloud/ubuntu-2004-lts"
-  type        = string
-}
-
 variable "network" {
   description = "Network for spark cluster"
   default     = "default"
