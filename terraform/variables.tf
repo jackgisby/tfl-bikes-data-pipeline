@@ -1,7 +1,5 @@
 locals {
   data_lake_bucket = "bikes_data_lake"
-  airflow_vm = bikes_airflow_etl_vm
-  spark_cluster = bikes_transform_load_spark
 }
 
 variable "project" {
@@ -25,10 +23,4 @@ variable "bq_dataset" {
   description = "BigQuery Dataset that transformed bike rental data will be loaded to"
   type = string
   default = "bikes_data_warehouse"
-}
-
-variable "network" {
-  description = "Network for spark cluster"
-  default     = "default"
-  type        = string
 }
