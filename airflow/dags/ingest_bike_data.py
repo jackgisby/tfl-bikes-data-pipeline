@@ -1,11 +1,5 @@
-import os
 import logging
-
-import csv
-import pyarrow.csv as pv
-import pyarrow.parquet as pq
-from xml.etree import ElementTree
-
+from os import environ
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -16,12 +10,12 @@ from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesyste
 
 
 # Get environment variables from the docker container pointing to the GCS project and data stores
-GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
-GCP_GCS_BUCKET = os.environ.get("GCP_GCS_BUCKET")
-BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
+GCP_PROJECT_ID = environ.get("GCP_PROJECT_ID")
+GCP_GCS_BUCKET = environ.get("GCP_GCS_BUCKET")
+BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 
 # Local folder within the docker container
-AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
+AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
 
 def get_usage_filenames_from_time(execution_date):
@@ -51,32 +45,55 @@ def get_usage_filenames_from_time(execution_date):
 
 def format_to_parquet(csv_filename):
     """
-    Converts a CSV file to a parquet file for storage in a GCS bucket.
+    Converts a CSV file to a parquet file. Parquet files are ideal because they allow for
+    efficient data compression while allowing queries to read only the necessary columns.
 
     :param csv_filename: The CSV file to be converted.
     """
 
-    if not csv_filename.endswith(".csv"):
+    if not csv_filename.lower().endswith(".csv"):
         raise TypeError("Can only convert CSV files to parquet")
 
-    pq.write_table(pv.read_csv(csv_filename), csv_filename.replace(".csv", ".parquet"))
+    # Import pyarrow within task
+    from pyarrow.csv import read_csv
+    from pyarrow.parquet import write_table
+
+    # Convert CSV to parquet
+    write_table(read_csv(csv_filename), csv_filename.replace(".csv", ".parquet"))
 
 def reformat_locations_xml(xml_filename):
+    """
+    Converts a live XML corresponding to bike locations and extracts relevant data fields.
 
+    :param xml_filename: The name of the XML file to be processed.  
+    """
+
+    if not xml_filename.lower().endswith(".xml"):
+        raise TypeError("Can only extract data from XML files")
+
+    # Modules for converting xml to csv
+    import csv
+    from xml.etree import ElementTree
+
+    # Get the root of the XML
     locations_tree = ElementTree.parse(xml_filename)
     stations = locations_tree.getroot()
 
+    # These are the variables we wish to extract
     station_vars = ["id", "name", "terminalName", "lat", "long"]
 
+    # Create replacement CSV
     with open(xml_filename.replace(".xml", ".csv"), "w") as output_file:
 
+        # Write header to CSV
         output_csv = csv.writer(output_file)
         output_csv.writerow(station_vars)
         
+        # Loop through each node (station) and find each variable, write to CSV
         for station in stations:
             output_csv.writerow([station.find(station_var).text for station_var in station_vars])
-    
-    
+
+
 with DAG(
     dag_id = "ingest_bike_usage",
     schedule_interval = "0 20 * * 2",
