@@ -113,6 +113,7 @@ def send_to_bigquery(df, additional_options=None):
     
     # Append data to pre-existing BigQuery table
     df = df.write.format("bigquery") \
+        .mode("overwrite") \
         .option("project", GCP_PROJECT_ID) \
         .option("dataset", BIGQUERY_DATASET) 
 
