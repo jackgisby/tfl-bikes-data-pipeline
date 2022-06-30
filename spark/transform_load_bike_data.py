@@ -31,9 +31,6 @@ def get_usage_data(spark, file_name):
     # Read parquet
     df = spark.read.parquet(file_name) 
 
-    logger.info("Raw imported usage data:")
-    df.show()
-
     # Rename columns
     old_columns = df.schema.names
     new_columns = ["rental_id", "duration", "bike_id", "end_timestamp_string", "end_station_id", "end_station_name", "start_timestamp_string", "start_station_id", "start_station_name"]
@@ -41,8 +38,8 @@ def get_usage_data(spark, file_name):
     for old_column, new_column in zip(old_columns, new_columns):
         df = df.withColumnRenamed(old_column, new_column)
 
-    logger.debug("Renamed columns:")
-    df.show()
+    logger.debug("Loaded parquet after column renaming:")
+    logger.debug("Renamed columns: " + str(df.schema.names))
 
     # Convert dates to timestamps and get the unix timestamp for matching with the timestamp dimension table
     for date_col in ("start", "end"):
@@ -70,7 +67,7 @@ def get_usage_data(spark, file_name):
         .withColumn("minute", F.minute("timestamp").alias("minute"))
 
     # Log timestamp dimension details
-    logger.debug("Timestamp dimension:")
+    logger.debug("Timestamp dimension: ")
     timestamp_dimension.show()
 
     get_column_types_from_df(timestamp_dimension)
@@ -81,13 +78,11 @@ def get_usage_data(spark, file_name):
 
     # Create bike dimension table
     rental_dimension = df.select("rental_id", "bike_id", "duration").withColumnRenamed("rental_id", "id")
-    logger.info("rental_dimension:")
-    rental_dimension.show()
+    logger.info("rental_dimension: " + str(rental_dimension.schema.names))
 
     # Create fact table
     fact_table = df.select("rental_id", "start_station_id", "end_station_id", "start_timestamp_id", "end_timestamp_id", "start_timestamp", "end_timestamp")
-    logger.info("fact_table:")
-    fact_table.show()
+    logger.info("fact_table: " + str(rental_dimension.schema.names))
 
     return fact_table, rental_dimension, timestamp_dimension
 
@@ -140,29 +135,29 @@ def main():
     # Temporary export space
     spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
 
-    # # Get data from parquet and process
-    # fact_table, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
+    # Get data from parquet and process
+    fact_table, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
 
-    # send_to_bigquery(
-    #     spark, 
-    #     fact_table, 
-    #     additional_options = {
-    #         "partitionField": "end_timestamp",
-    #         "partitionType": "MONTH",
-    #         "table": "fact_table"
-    #     }
-    # )
+    send_to_bigquery(
+        spark, 
+        fact_table, 
+        additional_options = {
+            "partitionField": "end_timestamp",
+            "partitionType": "MONTH",
+            "table": "fact_table"
+        }
+    )
 
-    # send_to_bigquery(
-    #     timestamp_dimension, 
-    #     additional_options = {
-    #         "partitionField": "timestamp",
-    #         "partitionType": "MONTH",
-    #         "table": "dim_timestamp"
-    #     }
-    # )
+    send_to_bigquery(
+        timestamp_dimension, 
+        additional_options = {
+            "partitionField": "timestamp",
+            "partitionType": "MONTH",
+            "table": "dim_timestamp"
+        }
+    )
 
-    # send_to_bigquery(rental_dimension, {"table": "dim_rental"})
+    send_to_bigquery(rental_dimension, {"table": "dim_rental"})
 
     # Get data from parquet and process
     locations_dimension = get_locations_data(spark, f"gs://{GCP_GCS_BUCKET}/locations_data/livecyclehireupdates.parquet")
