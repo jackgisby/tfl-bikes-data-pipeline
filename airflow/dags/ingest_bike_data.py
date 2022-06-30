@@ -150,6 +150,14 @@ with DAG(
         bash_command = f"curl -sSLf https://cycling.data.tfl.gov.uk/usage-stats/{csv_file_name} > {AIRFLOW_HOME}/{csv_file_name}"
     )
 
+    # Remove spaces from file header
+    convert_csv_header = BashOperator(
+        task_id = "convert_csv_header",
+        bash_command = f"""new_header='Rental_Id,Duration,Bike_Id,End_Date,EndStation_Id,EndStation_Name,Start_Date,StartStation_Id,StartStation_Name'
+                           sed -i "1s/.*/$new_header/" {AIRFLOW_HOME}/{csv_file_name}
+                        """
+    )
+
     # We convert to the columnar parquet format for upload to GCS
     convert_to_parquet = PythonOperator(
         task_id = "convert_to_parquet",
@@ -172,7 +180,7 @@ with DAG(
         bucket = GCP_GCS_BUCKET
     )
 
-    get_file_names >> download_file_from_https >> convert_to_parquet >> transfer_data_to_gcs
+    get_file_names >> download_file_from_https >> convert_csv_header >> convert_to_parquet >> transfer_data_to_gcs
 
 
 with DAG(
