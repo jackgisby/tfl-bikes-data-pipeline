@@ -48,7 +48,7 @@ def get_usage_file_names_from_time(execution_date):
 
     return formatted_dataset_name
 
-def format_to_parquet(csv_file_name):
+def format_to_parquet(csv_file_dir, csv_file_name):
     """
     Converts a CSV file to a parquet file. Parquet files are ideal because they allow for
     efficient data compression while allowing queries to read only the necessary columns.
@@ -67,12 +67,12 @@ def format_to_parquet(csv_file_name):
     parquet_file_name = csv_file_name.replace(".csv", ".parquet")
     logging.info(f"Parquetised dataset name: {parquet_file_name}")
 
-    write_table(read_csv(csv_file_name), parquet_file_name)
+    write_table(read_csv(f"{csv_file_dir}/{csv_file_name}"), f"{csv_file_dir}/{parquet_file_name}")
 
     return parquet_file_name
 
 
-def reformat_locations_xml(xml_file_name):
+def reformat_locations_xml(xml_file_dir, xml_file_name):
     """
     Converts a live XML corresponding to bike locations and extracts relevant data fields.
 
@@ -87,7 +87,7 @@ def reformat_locations_xml(xml_file_name):
     from xml.etree import ElementTree
 
     # Get the root of the XML
-    locations_tree = ElementTree.parse(xml_file_name)
+    locations_tree = ElementTree.parse(f"{xml_file_dir}/{xml_file_name}")
     stations = locations_tree.getroot()
 
     # These are the variables we wish to extract
@@ -97,7 +97,7 @@ def reformat_locations_xml(xml_file_name):
     csv_file_name = xml_file_name.replace(".xml", ".csv")
     logging.info(f"CSV dataset name: {csv_file_name}")
 
-    with open(csv_file_name, "w") as output_file:
+    with open(f"{xml_file_dir}/{csv_file_name}", "w") as output_file:
 
         # Write header to CSV
         output_csv = csv.writer(output_file)
@@ -141,13 +141,13 @@ with DAG(
     )
 
     # Get the return value of the get_file_names task
-    dataset_name = "{{ ti.xcom_pull(task_ids='get_file_names') }}"
-    logging.info(f"Pulled csv name: {dataset_name}")
+    csv_file_name = "{{ ti.xcom_pull(task_ids='get_file_names') }}"
+    logging.info(f"Pulled csv name: {csv_file_name}")
 
     # The week"s data is downloaded to the local machine
     download_file_from_https = BashOperator(
         task_id = "download_file_from_https",
-        bash_command = f"curl -sSLf https://cycling.data.tfl.gov.uk/usage-stats/{dataset_name} > {AIRFLOW_HOME}/{dataset_name}"
+        bash_command = f"curl -sSLf https://cycling.data.tfl.gov.uk/usage-stats/{csv_file_name} > {AIRFLOW_HOME}/{csv_file_name}"
     )
 
     # We convert to the columnar parquet format for upload to GCS
@@ -155,22 +155,23 @@ with DAG(
         task_id = "convert_to_parquet",
         python_callable = format_to_parquet,
         op_kwargs = {
-            "csv_file_name": f"{AIRFLOW_HOME}/{dataset_name}",
-        },
+            "csv_file_dir": AIRFLOW_HOME,
+            "csv_file_name": csv_file_name
+        }
     )
 
-    # Get the new dataset_name after conversion to parquet
-    dataset_name = "{{ ti.xcom_pull(task_ids='convert_to_parquet') }}"
-    logging.info(f"Pulled parquet name: {dataset_name}")
+    # Get the new dataset name after conversion to parquet
+    parquet_file_name = "{{ ti.xcom_pull(task_ids='convert_to_parquet') }}"
+    logging.info(f"Pulled parquet name: {parquet_file_name}")
 
     # The local data is transferred to the GCS 
     transfer_data_to_gcs = LocalFilesystemToGCSOperator(
         task_id = "transfer_data_to_gcs",
-        src = f"{AIRFLOW_HOME}/{dataset_name}",
-        dst = f"rides_data/{dataset_name}",
+        src = f"{AIRFLOW_HOME}/{parquet_file_name}",
+        dst = f"rides_data/{parquet_file_name}",
         bucket = GCP_GCS_BUCKET
     )
-    
+
     get_file_names >> download_file_from_https >> convert_to_parquet >> transfer_data_to_gcs
 
 
@@ -188,13 +189,13 @@ with DAG(
     }
 ) as ingest_bike_locations:
 
-    dataset_name = "livecyclehireupdates.xml"
+    xml_file_name = "livecyclehireupdates.xml"
     
     # The live dataset is downloaded as an XML
     # We only extract the static data concerning the bike pickup/dropoff locations
     download_file_from_https = BashOperator(
         task_id = "download_file_from_https",
-        bash_command = f"curl -sSLf https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/{dataset_name} > {AIRFLOW_HOME}/{dataset_name}"
+        bash_command = f"curl -sSLf https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/{xml_file_name} > {AIRFLOW_HOME}/{xml_file_name}"
     )
 
     # Data is an XML, so we extract the desired fields into a CSV
@@ -202,28 +203,30 @@ with DAG(
         task_id = "convert_from_xml",
         python_callable = reformat_locations_xml,
         op_kwargs = {
-            "xml_file_name": f"{AIRFLOW_HOME}/{dataset_name}",
-        },
+            "xml_file_dir": AIRFLOW_HOME,
+            "xml_file_name": xml_file_name
+        }
     )
 
-    dataset_name = dataset_name.replace(".xml", ".csv")
+    csv_file_name = xml_file_name.replace(".xml", ".csv")
 
     # We convert to the columnar parquet format for upload to GCS
     convert_to_parquet = PythonOperator(
         task_id = "convert_to_parquet",
         python_callable = format_to_parquet,
         op_kwargs = {
-            "csv_file_name": f"{AIRFLOW_HOME}/{dataset_name}",
-        },
+            "csv_file_dir": AIRFLOW_HOME,
+            "csv_file_name": csv_file_name
+        }
     )
 
-    dataset_name = dataset_name.replace(".csv", ".parquet")
+    parquet_file_name = csv_file_name.replace(".csv", ".parquet")
 
     # The local data is transferred to the GCS 
     transfer_data_to_gcs = LocalFilesystemToGCSOperator(
         task_id = "transfer_data_to_gcs",
-        src = f"{AIRFLOW_HOME}/{dataset_name}",
-        dst = f"locations_data/{dataset_name}",
+        src = f"{AIRFLOW_HOME}/{parquet_file_name}",
+        dst = f"locations_data/{parquet_file_name}",
         bucket = GCP_GCS_BUCKET
     )
 
