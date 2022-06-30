@@ -141,7 +141,7 @@ def main():
     spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
 
     # # Get data from parquet and process
-    # fact_table, rental_dimension, timestamp_dimension = get_usage_data(spark, f"{GCP_GCS_BUCKET}/rides_data/")
+    # fact_table, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
 
     # send_to_bigquery(
     #     spark, 
@@ -165,7 +165,7 @@ def main():
     # send_to_bigquery(rental_dimension, {"table": "dim_rental"})
 
     # Get data from parquet and process
-    locations_dimension = get_locations_data(spark, f"{GCP_GCS_BUCKET}/locations_data/livecyclehireupdates.parquet")
+    locations_dimension = get_locations_data(spark, f"gs://{GCP_GCS_BUCKET}/locations_data/livecyclehireupdates.parquet")
     send_to_bigquery(locations_dimension, {"table": "dim_locations"})
 
     spark.stop()
