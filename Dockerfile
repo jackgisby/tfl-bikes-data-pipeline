@@ -41,7 +41,7 @@ COPY airflow/scripts scripts
 RUN chmod +x scripts
 
 # Add pyspark script
-COPY spark/transform_load_bike_data.py .
+ENV SPARK_HOME=/opt/spark/
 
 # Switch to non-root user
 USER $AIRFLOW_UID
