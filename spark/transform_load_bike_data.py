@@ -139,7 +139,6 @@ def main():
     fact_table, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
 
     send_to_bigquery(
-        spark, 
         fact_table, 
         additional_options = {
             "partitionField": "end_timestamp",
