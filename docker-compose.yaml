@@ -46,6 +46,12 @@ x-airflow-common:
     # Variables for accessing GCS resources
     GCP_PROJECT_ID: ${GCP_PROJECT_ID}
     GCP_GCS_BUCKET: ${GCP_GCS_BUCKET}
+    GCP_PROJECT_DATAPROC_CLUSTER_NAME: ${GCP_PROJECT_DATAPROC_CLUSTER_NAME}
+    GCS_REGION: ${GCS_REGION}
+
+    # FTP variables
+    FTP_USER: ${FTP_USER}
+    FTP_PASS: ${FTP_PASS}
 
   volumes:
     - ./airflow/dags:/opt/airflow/dags
