@@ -4,13 +4,14 @@ FROM apache/airflow:2.2.3
 
 ENV AIRFLOW_HOME=/opt/airflow
 
+# Get required Python dependencies
+COPY airflow/requirements.txt .
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Obtain root access for installing required packages
 USER root
 RUN apt-get update -qq
-
-# Get required Python dependencies
-COPY airflow/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 SHELL ["/bin/bash", "-o", "pipefail", "-e", "-u", "-x", "-c"]
 
@@ -40,8 +41,8 @@ WORKDIR $AIRFLOW_HOME
 COPY airflow/scripts scripts
 RUN chmod +x scripts
 
-# Add pyspark script
-ENV SPARK_HOME=/opt/spark/
-
 # Switch to non-root user
 USER $AIRFLOW_UID
+
+# Add pyspark script
+ENV SPARK_HOME=/opt/spark/
