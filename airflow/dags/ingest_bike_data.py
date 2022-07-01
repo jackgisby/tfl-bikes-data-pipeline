@@ -193,7 +193,7 @@ with DAG(
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,
-        "retries": 0,
+        "retries": 0
     }
 ) as ingest_bike_locations:
 
