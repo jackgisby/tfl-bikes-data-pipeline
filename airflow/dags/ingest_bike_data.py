@@ -3,7 +3,6 @@ from os import environ
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.utils.dates import days_ago
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
@@ -185,11 +184,10 @@ with DAG(
 
 with DAG(
     dag_id = "ingest_bike_locations",
-    schedule_interval = "@once",
+    schedule_interval = "0 0 1 * *",
     catchup = False,
     max_active_runs = 1,
     tags = ["bike_locations"],
-    start_date = days_ago(1),
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,

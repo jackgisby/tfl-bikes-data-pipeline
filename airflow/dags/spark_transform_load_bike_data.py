@@ -22,11 +22,10 @@ AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
 with DAG(
     dag_id = "spark_transform_load_to_bigquery",
-    schedule_interval = "@monthly",
-    catchup = True,
+    schedule_interval = "0 0 20 * *",
+    catchup = False,
     max_active_runs = 1,
     tags = ["create_warehouse"],
-    start_date = days_ago(1),
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,

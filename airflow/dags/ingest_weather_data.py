@@ -4,7 +4,6 @@ from os import environ
 from datetime import datetime
 
 from airflow import DAG
-from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
 from airflow.providers.google.cloud.transfers.gcs_to_local import GCSToLocalFilesystemOperator
@@ -36,8 +35,16 @@ def get_weather_file_names_from_time(weather_type, year, month):
 
     from calendar import monthrange
 
+    # Get data for the previous month as it has just been published
+    year = int(year)
+    month = int(month) - 1
+
+    if month == -1:
+        year -= 1
+        month = 12
+
     # Gets the number of days in the month
-    month_end_date = monthrange(int(year), int(month))[1]
+    month_end_date = monthrange(year, month)[1]
 
     # The files are split by month with the following naming convention
     return f"{weather_type}_hadukgrid_uk_1km_day_{year}{month}01-{year}{month}{month_end_date}.nc"
@@ -80,7 +87,7 @@ def reformat_netcdf(file_name, weather_type):
     import netCDF4 as nc
 
     # This was obtained in the previous task
-    locations_df = pd.read_csv(f"{AIRFLOW_HOME}/dim_locations.csv")
+    locations_df = pd.read_parquet(f"{AIRFLOW_HOME}/dim_locations.parquet")
 
     # netCDF dataset
     # Main matrix has dimensions: time, projection_y_coordinate, projection_x_coordinate
@@ -133,12 +140,12 @@ def create_weather_dag(weather_type):
 
     ingest_weather_data = DAG(
         dag_id = f"ingest_{weather_type}_weather",
-        schedule_interval = "@monthly",
+        schedule_interval = "0 0 5 * *",
         catchup = True,
-        max_active_runs = 1,
+        max_active_runs = 2,
         tags = [weather_type],
-        start_date = datetime(2017, 1, 1),
-        end_date = datetime(2017, 2, 1),  # datetime(2021, 12, 1)
+        start_date = datetime(2017, 2, 3),
+        end_date = datetime(2017, 3, 3),  # datetime(2022, 1, 3)
         default_args = {
             "owner": "airflow",
             "depends_on_past": True,
@@ -184,8 +191,8 @@ def create_weather_dag(weather_type):
         get_locations_dim_from_gcs = GCSToLocalFilesystemOperator(
             task_id = "get_locations_dim_from_gcs",
             bucket = GCP_GCS_BUCKET,
-            object_name = "dim_locations.csv",
-            filename = f"{AIRFLOW_HOME}/dim_locations.csv"
+            object_name = "locations_data/livecyclehireupdates.parquet",
+            filename = f"{AIRFLOW_HOME}/dim_locations.parquet"
         )
 
         # Extract the relevant parts of the dataset into a CSV
@@ -230,8 +237,6 @@ def create_weather_dag(weather_type):
 
     return ingest_weather_data
 
-weather_types = ["rainfall", "tasmax", "tasmin"]
-
-rainfall_dag = create_weather_dag(weather_types[0])
-tasmax_dag = create_weather_dag(weather_types[1])
-tasmin_dag = create_weather_dag(weather_types[2])
+rainfall_dag = create_weather_dag("rainfall")
+tasmax_dag = create_weather_dag("tasmax")
+tasmin_dag = create_weather_dag("tasmin")
