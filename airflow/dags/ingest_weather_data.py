@@ -33,7 +33,6 @@ def get_weather_file_names_from_time(weather_type, year, month):
     """
 
     from calendar import monthrange
-    import netCDF4 as nc
 
     # Gets the number of days in the month
     month_end_date = monthrange(int(year), int(month))[1]
@@ -80,22 +79,25 @@ def reformat_netcdf(file_name, weather_type):
 
     locations_df = pd.read_csv("/opt/spark/bquxjob_9eb7b39_181ba76a383.csv")
 
+    # netCDF dataset
+    # Main matrix has dimensions: time, projection_y_coordinate, projection_x_coordinate
+    # Time matrix has dimensions: time
+    # Lat/Long matrices have dimensions: projection_y_coordinate, projection_x_coordinate
     nc_data = nc.Dataset(file_name)
 
     pd_location_to_weather_datasets = {}
     out_csv_file_name = f"{weather_type}_map.csv"
 
-    # For each bike location, get the weather variables over time for the nearest point
-    # Main matrix has dimensions: time, projection_y_coordinate, projection_x_coordinate
-    # Time matrix has dimensions: time
-    # Lat/Long matrices have dimensions: projection_y_coordinate, projection_x_coordinate
+    # Map netCDF times to dates (netCDF time is hours since the year 1800)
+    dates = nc.num2date(nc_data.variables["time"][:], nc_data.variables["time"].units)
 
-    for location_row in locations_df.iterrows():
+    # For each bike location, get the weather variables over time for the nearest point
+    for id, lat, long in zip(locations_df["id"], locations_df["lat"], locations_df["long"]):
         
         # Following code finds the closest point to each location in the weather dataset
         # The absolute difference in lat/long is calculated first
-        lat_diff = abs(location_row["latitude"] - nc_data.variables["latitude"][:])
-        long_diff = abs(location_row["longitude"] - nc_data.variables["longitude"][:])
+        lat_diff = abs(lat - nc_data.variables["latitude"][:])
+        long_diff = abs(long - nc_data.variables["longitude"][:])
 
         # Calculate a matrix of distances to each point in the weather dataset
         # Could be more accurate to use a different distance metric
@@ -109,16 +111,16 @@ def reformat_netcdf(file_name, weather_type):
         location_measurements = nc_data.variables[weather_type][:, y_coord, x_coord]
 
         # Add dataframe for the location
-        pd_location_to_weather_datasets[location_row["id"]] = pd.DataFrame({
-            "location_id": location_row["id"],
-            weather_type: location_measurements,
-            "time": nc_data.variables["time"][:]
+        pd_location_to_weather_datasets[id] = pd.DataFrame({
+            "location_id": id,
+            "time": dates,
+            weather_type: location_measurements
         })
 
-        print(pd_location_to_weather_datasets[location_row["id"]].head())
+        print(pd_location_to_weather_datasets[id].head())
 
     # Concatenate data for each location and write to CSV
-    pd.concat(pd_location_to_weather_datasets).write_csv(out_csv_file_name)
+    pd.concat(pd_location_to_weather_datasets).to_csv(out_csv_file_name)
 
     return out_csv_file_name
 
@@ -129,7 +131,7 @@ def create_weather_dag(weather_type):
         dag_id = f"ingest_{weather_type}_weather",
         schedule_interval = "@monthly",
         catchup = True,
-        max_active_runs = 3,
+        max_active_runs = 1,
         tags = [weather_type],
         start_date = datetime(2017, 1, 1),
         end_date = datetime(2017, 2, 1),  # datetime(2021, 12, 1)
