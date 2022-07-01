@@ -77,13 +77,5 @@ with DAG(
         trigger_rule = "all_done",
     )
 
-    copy_dim_locations_to_gcs = BigQueryToCloudStorageOperator(
-        task_id = "copy_dim_locations_to_gcs",
-        source_project_dataset_table = f"bikes_data_warehouse.dim_locations", 
-        destination_cloud_storage_uris = f"gs://{GCP_GCS_BUCKET}/dim_locations.csv",
-        export_format = "CSV"
-    )
-
     upload_pyspark_file >> submit_dataproc_spark_job_task
     create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
-    delete_cluster >> copy_dim_locations_to_gcs
