@@ -46,6 +46,9 @@ def get_weather_file_names_from_time(weather_type, year, month):
     # Gets the number of days in the month
     month_end_date = monthrange(year, month)[1]
 
+    if month < 10:
+        month = f"0{month}"
+
     # The files are split by month with the following naming convention
     return f"{weather_type}_hadukgrid_uk_1km_day_{year}{month}01-{year}{month}{month_end_date}.nc"
 
@@ -140,7 +143,7 @@ def create_weather_dag(weather_type):
 
     ingest_weather_data = DAG(
         dag_id = f"ingest_{weather_type}_weather",
-        schedule_interval = "0 0 5 * *",
+        schedule_interval = "0 0 3 * *",
         catchup = True,
         max_active_runs = 2,
         tags = [weather_type],

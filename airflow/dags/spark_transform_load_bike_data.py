@@ -1,4 +1,5 @@
 from os import environ
+from datetime import datetime
 
 from airflow import DAG
 from airflow.utils.dates import days_ago
@@ -26,6 +27,7 @@ with DAG(
     catchup = False,
     max_active_runs = 1,
     tags = ["create_warehouse"],
+    start_date = datetime(2017, 1, 20),
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,

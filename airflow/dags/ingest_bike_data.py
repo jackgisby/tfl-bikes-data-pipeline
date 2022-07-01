@@ -188,6 +188,7 @@ with DAG(
     catchup = False,
     max_active_runs = 1,
     tags = ["bike_locations"],
+    start_date = datetime(2017, 2, 1),
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,
