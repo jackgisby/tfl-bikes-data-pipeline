@@ -3,6 +3,7 @@ from os import environ
 from airflow import DAG
 from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
+from airflow.contrib.operators.bigquery_to_gcs import BigQueryToCloudStorageOperator
 from airflow.providers.google.cloud.operators.dataproc import DataprocCreateClusterOperator, \
                                                               DataprocSubmitPySparkJobOperator, \
                                                               DataprocDeleteClusterOperator
@@ -21,7 +22,7 @@ AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
 with DAG(
     dag_id = "spark_transform_load_to_bigquery",
-    schedule_interval = "@monthly",
+    schedule_interval = "@once",
     catchup = False,
     max_active_runs = 1,
     tags = ["create_warehouse"],
@@ -76,6 +77,13 @@ with DAG(
         trigger_rule = "all_done",
     )
 
+    copy_dim_locations_to_gcs = BigQueryToCloudStorageOperator(
+        task_id = "copy_dim_locations_to_gcs",
+        source_project_dataset_table = f"bikes_data_warehouse.dim_locations", 
+        destination_cloud_storage_uris = f"gs://{GCP_GCS_BUCKET}/dim_locations.csv",
+        export_format = "CSV"
+    )
+
     upload_pyspark_file >> submit_dataproc_spark_job_task
     create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
-
+    delete_cluster >> copy_dim_locations_to_gcs
