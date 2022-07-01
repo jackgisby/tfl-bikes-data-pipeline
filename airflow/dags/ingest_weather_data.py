@@ -4,8 +4,10 @@ from os import environ
 from datetime import datetime
 
 from airflow import DAG
+from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
+from airflow.providers.google.cloud.transfers.gcs_to_local import GCSToLocalFilesystemOperator
 
 from ingest_bike_data import format_to_parquet
 
@@ -77,7 +79,8 @@ def reformat_netcdf(file_name, weather_type):
     import pandas as pd
     import netCDF4 as nc
 
-    locations_df = pd.read_csv("/opt/spark/bquxjob_9eb7b39_181ba76a383.csv")
+    # This was obtained in the previous task
+    locations_df = pd.read_csv(f"{AIRFLOW_HOME}/dim_locations.csv")
 
     # netCDF dataset
     # Main matrix has dimensions: time, projection_y_coordinate, projection_x_coordinate
@@ -85,8 +88,8 @@ def reformat_netcdf(file_name, weather_type):
     # Lat/Long matrices have dimensions: projection_y_coordinate, projection_x_coordinate
     nc_data = nc.Dataset(file_name)
 
-    pd_location_to_weather_datasets = {}
-    out_csv_file_name = f"{weather_type}_map.csv"
+    pd_location_to_weather_datasets = []
+    out_csv_file_name = file_name.replace(".nc", ".csv")
 
     # Map netCDF times to dates (netCDF time is hours since the year 1800)
     dates = nc.num2date(nc_data.variables["time"][:], nc_data.variables["time"].units)
@@ -111,13 +114,14 @@ def reformat_netcdf(file_name, weather_type):
         location_measurements = nc_data.variables[weather_type][:, y_coord, x_coord]
 
         # Add dataframe for the location
-        pd_location_to_weather_datasets[id] = pd.DataFrame({
+        pd_location_to_weather_datasets.append(pd.DataFrame({
             "location_id": id,
             "time": dates,
             weather_type: location_measurements
-        })
+        }))
 
-        print(pd_location_to_weather_datasets[id].head())
+    logging.info("First dataset head: ")
+    logging.info(pd_location_to_weather_datasets[-1].head())
 
     # Concatenate data for each location and write to CSV
     pd.concat(pd_location_to_weather_datasets).to_csv(out_csv_file_name)
@@ -177,6 +181,13 @@ def create_weather_dag(weather_type):
             }
         )
 
+        get_locations_dim_from_gcs = GCSToLocalFilesystemOperator(
+            task_id = "get_locations_dim_from_gcs",
+            bucket = GCP_GCS_BUCKET,
+            object_name = "dim_locations.csv",
+            filename = f"{AIRFLOW_HOME}/dim_locations.csv"
+        )
+
         # Extract the relevant parts of the dataset into a CSV
         ingest_data_to_csv = PythonOperator(
             task_id = "ingest_data_to_csv",
@@ -205,18 +216,22 @@ def create_weather_dag(weather_type):
         parquet_file_name = "{{ ti.xcom_pull(task_ids='convert_to_parquet') }}"
         logging.info(f"Pulled parquet name: {parquet_file_name}")
 
-        # # The local data is transferred to the GCS 
-        # transfer_data_to_gcs = LocalFilesystemToGCSOperator(
-        #     task_id = "transfer_data_to_gcs",
-        #     src = f"{AIRFLOW_HOME}/{parquet_file_name}",
-        #     dst = f"weather_data/{weather_type}/{parquet_file_name}",
-        #     bucket = GCP_GCS_BUCKET
-        # )
+        # The local data is transferred to the GCS 
+        transfer_data_to_gcs = LocalFilesystemToGCSOperator(
+            task_id = "transfer_data_to_gcs",
+            src = f"{AIRFLOW_HOME}/{parquet_file_name}",
+            dst = f"weather_data/{weather_type}/{parquet_file_name}",
+            bucket = GCP_GCS_BUCKET
+        )
 
-        get_file_names >> download_file_from_ftp >> ingest_data_to_csv >> convert_to_parquet
+        get_file_names >> download_file_from_ftp >> ingest_data_to_csv 
+        get_locations_dim_from_gcs >> ingest_data_to_csv
+        ingest_data_to_csv >> convert_to_parquet >> transfer_data_to_gcs
 
     return ingest_weather_data
 
 weather_types = ["rainfall", "tasmax", "tasmin"]
 
 rainfall_dag = create_weather_dag(weather_types[0])
+tasmax_dag = create_weather_dag(weather_types[1])
+tasmin_dag = create_weather_dag(weather_types[2])
