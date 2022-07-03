@@ -201,7 +201,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
         .createOrReplaceTempView("weather_dimension_time")
 
     logger.info("Weather data joined to time: ")
-    spark.sql("SELECT * FROM weather_dimension_to_join LIMIT 10").show()
+    spark.sql("SELECT * FROM weather_dimension_time LIMIT 10").show()
 
     # Below we create an ID mapping the fact table to the weather dimension
     # There are two locations/times for each journey (start and end)
@@ -312,8 +312,8 @@ def main():
     send_to_bigquery(
         weather_dimension, 
         additional_options = {
-            "partitionField": "timestamp",
-            "partitionType": "MONTH",
+            # "partitionField": "timestamp",
+            # "partitionType": "MONTH",
             "table": "dim_weather"
         }
     )
