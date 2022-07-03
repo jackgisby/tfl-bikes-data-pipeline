@@ -71,7 +71,7 @@ def get_usage_data(spark, file_name):
     get_column_types_from_df(df)
 
     # Create date dimension table
-    begin_timestamp, end_timestamp = "2016-01-01 00:00", "2022-12-31 23:59"
+    begin_timestamp, end_timestamp = "2017-01-01 00:00", "2021-12-31 23:59"
 
     # Creates a timestamp dimension with the unix_timestamp as the key
     timestamp_dimension = spark.createDataFrame([(1,)], ["c"]) \
