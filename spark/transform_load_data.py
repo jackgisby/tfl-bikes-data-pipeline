@@ -274,9 +274,9 @@ def main():
     spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
 
     # Get data from parquet and process
-    fact_journey, rental_dimension, timestamp_dimension = get_usage_data(spark, "fake_lake/rides_data")  # f"gs://{GCP_GCS_BUCKET}/rides_data/"
+    fact_journey, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
 
-    fact_journey, weather_dimension = get_weather_data(spark, "fake_lake/weather_data/", fact_journey, timestamp_dimension)  # f"gs://{GCP_GCS_BUCKET}/weather_data/"
+    fact_journey, weather_dimension = get_weather_data(spark, f"gs://{GCP_GCS_BUCKET}/weather_data/", fact_journey, timestamp_dimension)
 
     send_to_bigquery(
         fact_journey, 
