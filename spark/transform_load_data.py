@@ -298,7 +298,11 @@ def main():
 
     send_to_bigquery(
         weather_dimension, 
-        additional_options = {"table": "dim_weather"}
+        additional_options = {
+            "partitionField": "timestamp",
+            "partitionType": "MONTH",
+            "table": "dim_weather"
+        }
     )
 
     send_to_bigquery(rental_dimension, {"table": "dim_rental"})
