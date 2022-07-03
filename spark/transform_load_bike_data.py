@@ -81,10 +81,10 @@ def get_usage_data(spark, file_name):
     logger.info("rental_dimension: " + str(rental_dimension.schema.names))
 
     # Create fact table
-    fact_table = df.select("rental_id", "start_station_id", "end_station_id", "start_timestamp_id", "end_timestamp_id", "start_timestamp", "end_timestamp")
-    logger.info("fact_table: " + str(rental_dimension.schema.names))
+    fact_journey = df.select("rental_id", "start_station_id", "end_station_id", "start_timestamp_id", "end_timestamp_id", "start_timestamp", "end_timestamp")
+    logger.info("fact_journey: " + str(rental_dimension.schema.names))
 
-    return fact_table, rental_dimension, timestamp_dimension
+    return fact_journey, rental_dimension, timestamp_dimension
 
 def get_locations_data(spark, file_name):
     """ Extract data from the journey/usage files converted to parquet from the TfL portal. """
@@ -137,14 +137,14 @@ def main():
     spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
 
     # Get data from parquet and process
-    fact_table, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
+    fact_journey, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
 
     send_to_bigquery(
-        fact_table, 
+        fact_journey, 
         additional_options = {
             "partitionField": "end_timestamp",
             "partitionType": "MONTH",
-            "table": "fact_table"
+            "table": "fact_journey"
         }
     )
 
