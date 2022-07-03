@@ -163,7 +163,8 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
                                          .withColumn("id", F.col("id").cast("int")) \
                                          .withColumn("location_id", F.col("location_id").cast("int")) \
                                          .withColumn("timestamp_id", F.col("timestamp_id").cast("int")) \
-                                         .select("id", "location_id", "timestamp_id", "rainfall") 
+                                         .withColumnRenamed("time", "timestamp") \
+                                         .select("id", "location_id", "timestamp_id", "timestamp", "rainfall") 
 
     logger.info("Modified weather dataframe: ")
     print(weather_dimension.show())
