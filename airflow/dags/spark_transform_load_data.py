@@ -37,8 +37,8 @@ with DAG(
 
     upload_pyspark_file = LocalFilesystemToGCSOperator(
         task_id = "upload_pyspark_file",
-        src = f"{SPARK_HOME}/transform_load_bike_data.py",
-        dst = f"spark/transform_load_bike_data.py",
+        src = f"{SPARK_HOME}/transform_load_data.py",
+        dst = f"spark/transform_load_data.py",
         bucket = GCP_GCS_BUCKET
     )
 
@@ -63,7 +63,7 @@ with DAG(
 
     submit_dataproc_spark_job_task = DataprocSubmitPySparkJobOperator(
         task_id = "submit_dataproc_spark_job_task",
-        main = f"gs://{GCP_GCS_BUCKET}/spark/transform_load_bike_data.py",
+        main = f"gs://{GCP_GCS_BUCKET}/spark/transform_load_data.py",
         arguments = [GCP_PROJECT_ID, GCP_GCS_BUCKET, BIGQUERY_DATASET],
         cluster_name = GCP_PROJECT_DATAPROC_CLUSTER_NAME,
         region = GCS_REGION,

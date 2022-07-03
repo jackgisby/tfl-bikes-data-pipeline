@@ -137,3 +137,4 @@ airflow/logs/
 
 # Spark
 fake_lake/
+spark/*.csv
