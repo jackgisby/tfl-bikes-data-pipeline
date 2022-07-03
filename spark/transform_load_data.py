@@ -228,7 +228,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
         fact_journey_weather_joined = spark.sql(f"""
             SELECT * 
             FROM {journey_side}_fact_journey_time_joined AS fjtj
-            LEFT JOIN weather_dimension_time as wdt
+            INNER JOIN weather_dimension_time as wdt
                 ON fjtj.year = wdt.year 
                 AND fjtj.month = wdt.month 
                 AND fjtj.dayofmonth = wdt.dayofmonth
