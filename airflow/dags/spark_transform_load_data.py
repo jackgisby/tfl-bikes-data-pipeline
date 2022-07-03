@@ -2,9 +2,7 @@ from os import environ
 from datetime import datetime
 
 from airflow import DAG
-from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
-from airflow.contrib.operators.bigquery_to_gcs import BigQueryToCloudStorageOperator
 from airflow.providers.google.cloud.operators.dataproc import DataprocCreateClusterOperator, \
                                                               DataprocSubmitPySparkJobOperator, \
                                                               DataprocDeleteClusterOperator
