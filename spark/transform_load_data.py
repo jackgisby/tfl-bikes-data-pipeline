@@ -27,7 +27,7 @@ def get_column_types_from_df(df):
 
     :param df: A spark dataframe.
     """
-    
+
     for column_name in df.schema.names:
         logger.info(f"{column_name}: {df.schema[column_name].dataType}")
 
@@ -263,7 +263,7 @@ def main():
     # For debugging, use "local[*]" as master, for usage on GCP, use "yarn"
     spark = SparkSession \
         .builder \
-        .master("local[*]") \
+        .master("yarn") \
         .appName("transform_load_bike_data") \
         .getOrCreate()    
 
@@ -276,8 +276,6 @@ def main():
     fact_journey, rental_dimension, timestamp_dimension = get_usage_data(spark, "fake_lake/rides_data")  # f"gs://{GCP_GCS_BUCKET}/rides_data/"
 
     fact_journey, weather_dimension = get_weather_data(spark, "fake_lake/weather_data/", fact_journey, timestamp_dimension)  # f"gs://{GCP_GCS_BUCKET}/weather_data/"
-
-    exit()
 
     send_to_bigquery(
         fact_journey, 
