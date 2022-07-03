@@ -14,10 +14,10 @@ GCP_GCS_BUCKET = environ.get("GCP_GCS_BUCKET")
 BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 GCP_PROJECT_DATAPROC_CLUSTER_NAME = environ.get("GCP_PROJECT_DATAPROC_CLUSTER_NAME", "bikes-cluster")
 GCS_REGION = environ.get("GCS_REGION", "europe-north1")
-SPARK_HOME = environ.get("SPARK_HOME")
 
 # Local folder within the docker container
 AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
+SPARK_HOME = environ.get("SPARK_HOME", "/opt/spark/")
 
 with DAG(
     dag_id = "spark_transform_load_to_bigquery",
@@ -49,12 +49,12 @@ with DAG(
             "master_config": {
                 "num_instances": 1,
                 "machine_type_uri": "n1-standard-4",
-                "disk_config": {"boot_disk_type": "pd-standard", "boot_disk_size_gb": 32},
+                "disk_config": {"boot_disk_type": "pd-standard", "boot_disk_size_gb": 30},
             },
             "worker_config": {
                 "num_instances": 2,
                 "machine_type_uri": "n1-standard-4",
-                "disk_config": {"boot_disk_type": "pd-standard", "boot_disk_size_gb": 32},
+                "disk_config": {"boot_disk_type": "pd-standard", "boot_disk_size_gb": 30},
             },
         }
     )
