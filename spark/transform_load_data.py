@@ -26,7 +26,20 @@ def get_column_types_from_df(df):
         logger.info(f"{column_name}: {df.schema[column_name].dataType}")
 
 def get_usage_data(spark, file_name):
-    """ Extract data from the journey/usage files converted to parquet from the TfL portal. """
+    """ 
+    Extract data from the journey/usage files converted to parquet from the TfL portal. 
+
+    The journey data has its variables transformed before being split into three tables. The
+    key table is the "journey" fact table. An additional table "rental" is created, with 
+    information on each bike rental (using the rental_id key). Another table, timestamp,
+    is created which uses the unix timestap as a key.
+    
+    :param spark: A SparkSession object.
+
+    :param file_name: The folder in which journey data is stored in parquet files.
+
+    :return: Returns "journey", "rental" and "timestamp" tables as spark dataframes.
+    """
 
     # Read parquet
     df = spark.read.parquet(file_name) 
@@ -87,7 +100,15 @@ def get_usage_data(spark, file_name):
     return fact_journey, rental_dimension, timestamp_dimension
 
 def get_locations_data(spark, file_name):
-    """ Extract data from the journey/usage files converted to parquet from the TfL portal. """
+    """ 
+    Extract data from the journey/usage files converted to parquet from the TfL portal. 
+
+    :param spark: A SparkSession object.
+
+    :param file_name: The location of a parquet file containing the journey data.
+
+    :return: Returns the locations data as a spark dataframe.
+    """
 
     df = spark.read.parquet(file_name) \
         .withColumnRenamed("terminalName", "terminal_name")
@@ -108,6 +129,27 @@ def get_locations_data(spark, file_name):
     df.show()
 
     return df
+
+def get_weather_data(spark, file_name, fact_journey):
+    """
+    Extract weather data stored in parquet files relating to each location extracted in `get_locations_data`. 
+
+    :param spark: A SparkSession object.
+
+    :param file_name: The location of parquet files containing the weather data. Within this directory
+        are three subfolders, each containing parquet files relating to a different type of weather data
+        (rainfall, minimum temp, maximum temp).
+
+    :param fact_journey: A table containing information on each journey. This is the fact table, so we will create
+        a new key within this table relating it to the weather table.
+
+    :return: Returns the weather data as a spark dataframe and a modified version of the input table `fact_journey`
+        which contains a new key relating it to the weather data.
+    """
+
+    weather_dimension = None
+
+    return fact_journey, weather_dimension
 
 def send_to_bigquery(df, additional_options=None):
     
@@ -139,6 +181,8 @@ def main():
     # Get data from parquet and process
     fact_journey, rental_dimension, timestamp_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
 
+    fact_journey, weather_dimension = get_weather_data(spark, f"gs://{GCP_GCS_BUCKET}/weather_data/")
+
     send_to_bigquery(
         fact_journey, 
         additional_options = {
@@ -157,12 +201,16 @@ def main():
         }
     )
 
+    send_to_bigquery(
+        weather_dimension, 
+        additional_options = {"table": "dim_weather"}
+    )
+
     send_to_bigquery(rental_dimension, {"table": "dim_rental"})
 
     # Get data from parquet and process
     locations_dimension = get_locations_data(spark, f"gs://{GCP_GCS_BUCKET}/locations_data/livecyclehireupdates.parquet")
     send_to_bigquery(locations_dimension, {"table": "dim_locations"})
-
     spark.stop()
 
 
