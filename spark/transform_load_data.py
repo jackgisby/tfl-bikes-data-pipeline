@@ -237,9 +237,9 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
     fact_journey_with_weather_id = spark.sql("""
         SELECT *
         FROM start_fact_journey_with_weather_id AS fjs
-        LEFT JOIN (SELECT rental_id, end_weather_id FROM end_fact_journey_with_weather_id) AS fje
-        ON fjs.rental_id = fje.rental_id
-    """)
+        LEFT JOIN (SELECT rental_id AS end_rental_id, end_weather_id FROM end_fact_journey_with_weather_id) AS fje
+        ON fjs.rental_id = fje.end_rental_id
+    """).drop("end_rental_id")
 
     logger.info("Final joined fact_journey: ")
     fact_journey_with_weather_id.show()
