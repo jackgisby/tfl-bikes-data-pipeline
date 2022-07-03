@@ -270,7 +270,7 @@ def main():
     spark.sparkContext.setLogLevel("ERROR")
 
     # Temporary export space
-    # spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
+    spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
 
     # Get data from parquet and process
     fact_journey, rental_dimension, timestamp_dimension = get_usage_data(spark, "fake_lake/rides_data")  # f"gs://{GCP_GCS_BUCKET}/rides_data/"
