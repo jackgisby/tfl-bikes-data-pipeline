@@ -156,15 +156,28 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
         which contains a new key relating it to the weather data.
     """
 
-    weather_dimension =  spark.read.parquet(f"{file_name}/rainfall/") 
+    # There is a folder for each weather variable, load as temporary view
+    for weather_type in ("rainfall", "tasmin", "tasmax"):
+        spark.read.parquet(f"{file_name}/{weather_type}/").createOrReplaceTempView(f"{weather_type}_from_parquet")
 
+    # Combine the views together into a weather dimension table
+    weather_dimension = spark.sql("""
+        SELECT rainfall.location_id, rainfall.time, rainfall.rainfall, tasmin.tasmin, tasmax.tasmax
+        FROM rainfall_from_parquet AS rainfall
+        LEFT JOIN tasmin_from_parquet AS tasmin
+            ON rainfall.location_id = tasmin.location_id AND rainfall.time = tasmin.time
+        LEFT JOIN tasmax_from_parquet AS tasmax
+            ON rainfall.location_id = tasmax.location_id AND rainfall.time = tasmax.time
+    """)
+
+    # Transform the weather data
     weather_dimension = weather_dimension.withColumn("id", F.monotonically_increasing_id()) \
                                          .withColumn("timestamp_id", F.unix_timestamp("time").alias("timestamp_id")) \
                                          .withColumn("id", F.col("id").cast("int")) \
                                          .withColumn("location_id", F.col("location_id").cast("int")) \
                                          .withColumn("timestamp_id", F.col("timestamp_id").cast("int")) \
                                          .withColumnRenamed("time", "timestamp") \
-                                         .select("id", "location_id", "timestamp_id", "timestamp", "rainfall") 
+                                         .select("id", "location_id", "timestamp_id", "timestamp", "rainfall", "tasmin", "tasmax") 
 
     logger.info("Modified weather dataframe: ")
     print(weather_dimension.show())
@@ -183,7 +196,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
         SELECT *
         FROM weather_dimension_to_join AS wdj
         LEFT JOIN timestamp_dimension_to_join AS tdj
-        ON wdj.timestamp_id = tdj.timestamp_id
+            ON wdj.timestamp_id = tdj.timestamp_id
     """) \
         .createOrReplaceTempView("weather_dimension_time")
 
@@ -208,7 +221,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
             SELECT *
             FROM {journey_side}_fact_journey AS fj
             LEFT JOIN timestamp_dimension_to_join AS tdj
-            ON fj.{journey_side}_timestamp_id = tdj.timestamp_id
+                ON fj.{journey_side}_timestamp_id = tdj.timestamp_id
         """).createOrReplaceTempView(f"{journey_side}_fact_journey_time_joined")
 
         # Finally, join weather to the fact table to get the ID
@@ -216,7 +229,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
             SELECT * 
             FROM {journey_side}_fact_journey_time_joined AS fjtj
             LEFT JOIN weather_dimension_time as wdt
-            ON fjtj.year = wdt.year 
+                ON fjtj.year = wdt.year 
                 AND fjtj.month = wdt.month 
                 AND fjtj.dayofmonth = wdt.dayofmonth
                 AND fjtj.{journey_side}_station_id = wdt.location_id
@@ -238,7 +251,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
         SELECT *
         FROM start_fact_journey_with_weather_id AS fjs
         LEFT JOIN (SELECT rental_id AS end_rental_id, end_weather_id FROM end_fact_journey_with_weather_id) AS fje
-        ON fjs.rental_id = fje.end_rental_id
+            ON fjs.rental_id = fje.end_rental_id
     """).drop("end_rental_id")
 
     logger.info("Final joined fact_journey: ")
