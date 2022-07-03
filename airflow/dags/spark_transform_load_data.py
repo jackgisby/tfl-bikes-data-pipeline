@@ -14,6 +14,7 @@ GCP_GCS_BUCKET = environ.get("GCP_GCS_BUCKET")
 BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 GCP_PROJECT_DATAPROC_CLUSTER_NAME = environ.get("GCP_PROJECT_DATAPROC_CLUSTER_NAME", "bikes-cluster")
 GCS_REGION = environ.get("GCS_REGION", "europe-north1")
+GCS_REGION = "europe-west2"
 
 # Local folder within the docker container
 AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")

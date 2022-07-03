@@ -220,7 +220,7 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
         spark.sql(f"""
             SELECT *
             FROM {journey_side}_fact_journey AS fj
-            LEFT JOIN timestamp_dimension_to_join AS tdj
+            INNER JOIN timestamp_dimension_to_join AS tdj
                 ON fj.{journey_side}_timestamp_id = tdj.timestamp_id
         """).createOrReplaceTempView(f"{journey_side}_fact_journey_time_joined")
 
