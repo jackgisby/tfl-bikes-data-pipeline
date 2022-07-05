@@ -2,6 +2,7 @@ from os import environ
 from datetime import datetime
 
 from airflow import DAG
+from airflow.utils.dates import days_ago
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
 from airflow.providers.google.cloud.operators.dataproc import DataprocCreateClusterOperator, \
                                                               DataprocSubmitPySparkJobOperator, \
@@ -21,18 +22,33 @@ AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 SPARK_HOME = environ.get("SPARK_HOME", "/opt/spark/")
 
 with DAG(
-    dag_id = "spark_transform_load_to_bigquery",
-    schedule_interval = "0 0 20 * *",
+    dag_id = "setup_bigquery",
+    axhwsulw_interval = "@once",
     catchup = False,
     max_active_runs = 1,
     tags = ["create_warehouse"],
+    start_date = days_ago(1),
+    default_args = {
+        "owner": "airflow",
+        "depends_on_past": True,
+        "retries": 0,
+    }
+) as setup_bigquery:
+    pass
+
+with DAG(
+    dag_id = "spark_transform_load",
+    schedule_interval = "0 0 20 * *",
+    catchup = False,
+    max_active_runs = 1,
+    tags = ["update_warehouse"],
     start_date = datetime(2017, 1, 20),
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,
         "retries": 0,
     }
-) as spark_transform_load_to_bigquery:
+) as spark_transform_load:
 
     upload_pyspark_file = LocalFilesystemToGCSOperator(
         task_id = "upload_pyspark_file",

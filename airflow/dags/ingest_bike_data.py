@@ -120,7 +120,7 @@ def reformat_locations_xml(xml_file_dir, xml_file_name):
 
 with DAG(
     dag_id = "ingest_bike_usage",
-    schedule_interval = "0 20 * * 2",
+    schedule_interval = "0 20 * * 2",  # Every week
     catchup = True,
     max_active_runs = 3,
     tags = ["bike_usage"],
@@ -191,7 +191,7 @@ with DAG(
     start_date = datetime(2017, 2, 1),
     default_args = {
         "owner": "airflow",
-        "depends_on_past": False,
+        "depends_on_past": True,
         "retries": 0
     }
 ) as ingest_bike_locations:
