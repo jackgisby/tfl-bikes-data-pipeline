@@ -1,11 +1,10 @@
+from doctest import DocFileCase
 import sys
 import logging
 from datetime import datetime
 
 import pyspark.sql.functions as F
 from pyspark.sql import SparkSession
-
-from setup_database import get_column_types_from_df, send_to_bigquery
 
 
 # Get arguments specifying GCS locations and pipeline parameters
@@ -23,6 +22,53 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
 curdate = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+
+def get_column_types_from_df(df):
+    """
+    Prints the column types of a spark dataframe to logger. Also counts how many
+    null or NaN values are in each column.
+
+    :param df: A spark RDD.
+    """
+
+    for column_name in df.schema.names:
+        logger.info(f"{column_name}: {df.schema[column_name].dataType}")
+
+    df.select([F.count(F.when(F.isnan(c) | F.col(c).isNull(), c)).alias(c) for c in df.columns]).show()
+
+
+def send_to_bigquery(df, additional_options=None, mode="append"):
+    """
+    Sends a spark RDD to BigQuery to create a new table. 
+
+    :param df: A spark RDD to be uploaded to BigQuery.
+
+    :param additional_options: Used to add options to the BigQuery write (using spark's `.option`
+        function). Must be a dictionary whose keys are the names of options for the bigquery write
+        and values are the values to be set for those options. Must contain "table".
+
+    :param mode: A string to be sent to the spark's `.mode` function. Can be set to "append" in order
+        to append to a new table, or "overwrite" to create a new table or overwite an existing one.
+    """
+
+    # Log some information about the table to be written
+    table = additional_options["table"]
+
+    logger.info(f"Sending table {table} to bigquery: ")
+    get_column_types_from_df(df)
+    df.show()
+
+    # Append data to pre-existing BigQuery table or create a new one
+    df = df.write.format("bigquery") \
+        .mode(mode) \
+        .option("project", GCP_PROJECT_ID) \
+        .option("dataset", BIGQUERY_DATASET) 
+
+    for option_name, option_value in additional_options.items():
+        df = df.option(option_name, option_value)
+
+    df = df.save()
 
 
 def get_usage_data(spark, file_name):
@@ -74,6 +120,7 @@ def get_usage_data(spark, file_name):
 
     return fact_journey, rental_dimension
 
+
 def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
     """
     Extract weather data stored in parquet files relating to each location extracted in `get_locations_data`. 
@@ -116,9 +163,8 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
                                          .withColumn("timestamp_id", F.col("timestamp_id").cast("int")) \
                                          .withColumnRenamed("time", "timestamp")
                                          
-    # Create a new id column that concatenates the timestamp and location IDs
-    weather_dimension = weather_dimension.withColumn("id", F.concat(weather_dimension.timestamp_id, weather_dimension.location_id)) \
-                                         .withColumn("id", F.col("id").cast("int")) \
+    # Create a new id column that concatenates the timestamp and location IDs by an underscore
+    weather_dimension = weather_dimension.withColumn("id", F.concat_ws("_", F.col("location_id"), F.col("timestamp_id"))) \
                                          .select("id", "location_id", "timestamp_id", "timestamp", "rainfall", "tasmin", "tasmax") 
 
     logger.info("Modified weather dataframe: ")
@@ -196,10 +242,8 @@ def get_weather_data(spark, file_name, fact_journey, timestamp_dimension):
             ON fjs.rental_id = fje.end_rental_id
     """).drop("end_rental_id")
 
-    logger.info("Final joined fact_journey: ")
-    fact_journey_with_weather_id.show()
-
     return fact_journey_with_weather_id, weather_dimension
+
 
 def main():
     
@@ -217,14 +261,15 @@ def main():
 
     # Get bike usage/journey data from parquet and process
     # Each file contains data for that month (by end date), so data is split into monthly folders (YYYYMM)
-    fact_journey, rental_dimension  = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/{MONTH_YEAR}/")
+    fact_journey, rental_dimension = get_usage_data(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/{MONTH_YEAR}/")
 
     # Timestamp dimension, created previously in airflow/dags/spark_transform_load.py
     # Required for joining the weather dimension to fact_journey
     timestamp_dimension = spark.read.format("bigquery") \
         .option("project", GCP_PROJECT_ID) \
         .option("dataset", BIGQUERY_DATASET) \
-        .option("table", "dim_timestamp")
+        .option("table", "dim_timestamp") \
+        .load()
 
     # Create the weather dimension and add its ID as a column in fact_journey 
     fact_journey, weather_dimension = get_weather_data(
@@ -235,10 +280,32 @@ def main():
     )
 
     # Update tables in BigQuery
-    send_to_bigquery(fact_journey, additional_options = {"table": "fact_journey"}, mode = "append")
-    send_to_bigquery(weather_dimension, additional_options = {"table": "dim_weather"}, mode = "append")
-    send_to_bigquery(rental_dimension, {"table": "dim_rental"}, mode = "append")
+    # If this is the first DAG run, then create the tables
+    # Else, append the data to the existing tables
+    write_mode = "overwrite" if MONTH_YEAR == "201612" else "append"
 
+    send_to_bigquery(rental_dimension, {"table": "dim_rental"}, mode = write_mode)
+
+    send_to_bigquery(
+        fact_journey, 
+        additional_options = {
+            "table": "fact_journey",
+            "partitionType": "MONTH",
+            "partitionField": "end_timestamp"
+        }, 
+        mode = write_mode
+    )
+    
+    send_to_bigquery(
+        weather_dimension, 
+        additional_options = {
+            "table": "dim_weather",
+            "partitionType": "MONTH",
+            "partitionField": "timestamp"
+        }, 
+        mode = write_mode
+    )
+    
     spark.stop()
 
 

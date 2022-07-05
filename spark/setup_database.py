@@ -31,6 +31,9 @@ def get_column_types_from_df(df):
     for column_name in df.schema.names:
         logger.info(f"{column_name}: {df.schema[column_name].dataType}")
 
+    df.select([F.count(F.when(F.isnan(c) | F.col(c).isNull(), c)).alias(c) for c in df.columns]).show()
+
+
 def send_to_bigquery(df, additional_options=None, mode="append"):
     """
     Sends a spark RDD to BigQuery to create a new table. 
@@ -39,13 +42,20 @@ def send_to_bigquery(df, additional_options=None, mode="append"):
 
     :param additional_options: Used to add options to the BigQuery write (using spark's `.option`
         function). Must be a dictionary whose keys are the names of options for the bigquery write
-        and values are the values to be set for those options.
+        and values are the values to be set for those options. Must contain "table".
 
     :param mode: A string to be sent to the spark's `.mode` function. Can be set to "append" in order
         to append to a new table, or "overwrite" to create a new table or overwite an existing one.
     """
-    
-    # Append data to pre-existing BigQuery table
+
+    # Log some information about the table to be written
+    table = additional_options["table"]
+
+    logger.info(f"Sending table {table} to bigquery: ")
+    get_column_types_from_df(df)
+    df.show()
+
+    # Append data to pre-existing BigQuery table or create a new one
     df = df.write.format("bigquery") \
         .mode(mode) \
         .option("project", GCP_PROJECT_ID) \
@@ -55,6 +65,7 @@ def send_to_bigquery(df, additional_options=None, mode="append"):
         df = df.option(option_name, option_value)
 
     df = df.save()
+
 
 def get_timestamp_dimension(spark):
     """ 
@@ -89,6 +100,7 @@ def get_timestamp_dimension(spark):
 
     return df
 
+
 def get_locations_data(spark, file_name):
     """ 
     Extract data from the journey/usage files converted to parquet from the TfL portal. 
@@ -120,6 +132,7 @@ def get_locations_data(spark, file_name):
 
     return df
 
+
 def main():
     
     # For debugging, use "local[*]" as master, for usage on GCP, use "yarn"
@@ -135,7 +148,7 @@ def main():
     spark.conf.set("temporaryGcsBucket", GCP_GCS_BUCKET)
 
     # Get data from parquet and process
-    timestamp_dimension = get_timestamp_dimension(spark, f"gs://{GCP_GCS_BUCKET}/rides_data/")
+    timestamp_dimension = get_timestamp_dimension(spark)
 
     # Create table with partitioning by month
     send_to_bigquery(
