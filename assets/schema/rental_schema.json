@@ -1,0 +1,1 @@
+[{"name": "id", "type": "INTEGER", "mode": "REQUIRED", "description": "The rental ID."}, {"name": "bike_id", "type": "INTEGER", "mode": "REQUIRED", "description": "The bike ID."}, {"name": "duration", "type": "INTEGER", "mode": "NULLABLE", "description": "The duration the bike was rented for."}]
