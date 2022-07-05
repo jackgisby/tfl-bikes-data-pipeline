@@ -19,6 +19,37 @@ BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 # Local folder within the docker container
 AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
+def get_previous_month(year, month): 
+    """
+    Gets year and month of the previous month.
+
+    :param year: A string representing the year (YYYY)
+
+    :param month: A string representing the month (MM)
+
+    :return: Returns a tuple of the previous month's year (int), the previous 
+        month's month (int) and the final day of the previous month (int).
+    """
+
+    from calendar import monthrange
+
+    # Get variables as integers and remove 1 from month
+    year = int(year)
+    month = int(month) - 1
+
+    # Case: last month was the previous year
+    if month == -1:
+        year -= 1
+        month = 12
+
+    # Gets the number of days in the month
+    month_end_date = monthrange(year, month)[1]
+
+    if month < 10:
+        month = f"0{month}"
+
+    return year, month, month_end_date
+
 
 def get_weather_file_names_from_time(weather_type, year, month):
     """
@@ -33,21 +64,8 @@ def get_weather_file_names_from_time(weather_type, year, month):
     :return: The name of the file to be fetched from FTP
     """
 
-    from calendar import monthrange
-
     # Get data for the previous month as it has just been published
-    year = int(year)
-    month = int(month) - 1
-
-    if month == -1:
-        year -= 1
-        month = 12
-
-    # Gets the number of days in the month
-    month_end_date = monthrange(year, month)[1]
-
-    if month < 10:
-        month = f"0{month}"
+    year, month, month_end_date = get_previous_month(year, month)
 
     # The files are split by month with the following naming convention
     return f"{weather_type}_hadukgrid_uk_1km_day_{year}{month}01-{year}{month}{month_end_date}.nc"
