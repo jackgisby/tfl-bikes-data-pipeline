@@ -19,56 +19,68 @@ BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 # Local folder within the docker container
 AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
-def get_previous_month(year, month): 
+
+def get_previous_month(execution_date): 
     """
     Gets year and month of the previous month.
 
-    :param year: A string representing the year (YYYY)
+    :param execution_date: The current date, as a datetime object.
 
-    :param month: A string representing the month (MM)
-
-    :return: Returns a tuple of the previous month's year (int), the previous 
-        month's month (int) and the final day of the previous month (int).
+    :return: Returns a tuple of the previous month's year (str), the previous 
+        month's month (str) and the final day of the previous month (str).
     """
 
     from calendar import monthrange
 
     # Get variables as integers and remove 1 from month
-    year = int(year)
-    month = int(month) - 1
+    year = int(execution_date.strftime('%Y'))
+    month = int(execution_date.strftime('%m')) - 1
 
     # Case: last month was the previous year
-    if month == -1:
+    if month == 0:
         year -= 1
         month = 12
 
     # Gets the number of days in the month
-    month_end_date = monthrange(year, month)[1]
+    month_end_date = str(monthrange(year, month)[1])
 
     if month < 10:
         month = f"0{month}"
 
-    return year, month, month_end_date
+    return str(year), month, month_end_date
 
 
-def get_weather_file_names_from_time(weather_type, year, month):
+def get_previous_month_as_yyyymm(execution_date):
+    """
+    Gets year and month of the previous month (using `get_previous_month`).
+
+    :param execution_date: The current date, as a datetime object.
+
+    :return: A string containing the previous month's date in "YYYYMM" format.
+    """
+
+    year, month, _ = get_previous_month(execution_date)
+
+    return f"{year}{month}"
+
+
+def get_weather_file_names_from_time(weather_type, execution_date):
     """
     Gets the name of the dataset in the FTP using the date of the DAG run.
 
     :param weather_type: The name of the weather variable to fetch
 
-    :param year: A string representing the year (YYYY)
-
-    :param month: A string representing the month (MM)
+    :param execution_date: The current date, as a datetime object.
 
     :return: The name of the file to be fetched from FTP
     """
 
     # Get data for the previous month as it has just been published
-    year, month, month_end_date = get_previous_month(year, month)
+    year, month, month_end_date = get_previous_month(execution_date)
 
     # The files are split by month with the following naming convention
     return f"{weather_type}_hadukgrid_uk_1km_day_{year}{month}01-{year}{month}{month_end_date}.nc"
+
 
 def get_ftp_dataset(host, location, out_file):
     """
@@ -165,33 +177,34 @@ def create_weather_dag(weather_type):
         catchup = True,
         max_active_runs = 2,
         tags = [weather_type],
-        start_date = datetime(2017, 2, 3),
+        start_date = datetime(2017, 1, 3),
         end_date = datetime(2017, 3, 3),  # datetime(2022, 2, 3)
         default_args = {
             "owner": "airflow",
             "depends_on_past": True,
             "retries": 0
         }
-    ) 
+    )
 
     with ingest_weather_data:
         
         # This is where the daily weather data grid is located in the FTP server
         ftp_path = f"/badc/ukmo-hadobs/data/insitu/MOHC/HadOBS/HadUK-Grid/v1.1.0.0/1km/{weather_type}/day/v20220310/"
 
-        # Get the month (in YYYYMM format) of the current DAG run
-        year = "{{ execution_date.strftime('%Y') }}"
-        month = "{{ execution_date.strftime('%m') }}"
+        # Get the date (in "YYYYMM" format) of the data
+        get_previous_month = PythonOperator(
+            task_id = "get_previous_month",
+            python_callable = get_previous_month_as_yyyymm
+        )
+
+        data_date = "{{ ti.xcom_pull(task_ids='get_previous_month') }}"
+        logging.info(f"Data date: {data_date}")
 
         # Get the name of the file using the date of the DAG run
         get_file_names = PythonOperator(
             task_id = "get_file_names",
             python_callable = get_weather_file_names_from_time,
-            op_kwargs = {
-                "weather_type": weather_type,
-                "year": year,
-                "month": month
-            }
+            op_kwargs = {"weather_type": weather_type}
         )
 
         ftp_file_name = "{{ ti.xcom_pull(task_ids='get_file_names') }}"
@@ -230,6 +243,9 @@ def create_weather_dag(weather_type):
         csv_file_name = "{{ ti.xcom_pull(task_ids='ingest_data_to_csv') }}"
         logging.info(f"Pulled CSV name: {csv_file_name}")
 
+        get_file_names >> download_file_from_ftp >> ingest_data_to_csv 
+        get_locations_dim_from_gcs >> ingest_data_to_csv
+
         # We convert to the columnar parquet format for upload to GCS
         convert_to_parquet = PythonOperator(
             task_id = "convert_to_parquet",
@@ -245,18 +261,20 @@ def create_weather_dag(weather_type):
         logging.info(f"Pulled parquet name: {parquet_file_name}")
 
         # The local data is transferred to the GCS 
+        # The data is stored in separate folders for each weather type
+        # The data is also separated by subfolders by month
         transfer_data_to_gcs = LocalFilesystemToGCSOperator(
             task_id = "transfer_data_to_gcs",
             src = f"{AIRFLOW_HOME}/{parquet_file_name}",
-            dst = f"weather_data/{weather_type}/{year}{month}/{parquet_file_name}",
+            dst = f"weather_data/{weather_type}/{data_date}/{parquet_file_name}",
             bucket = GCP_GCS_BUCKET
         )
 
-        get_file_names >> download_file_from_ftp >> ingest_data_to_csv 
-        get_locations_dim_from_gcs >> ingest_data_to_csv
         ingest_data_to_csv >> convert_to_parquet >> transfer_data_to_gcs
+        get_previous_month >> transfer_data_to_gcs
 
     return ingest_weather_data
+
 
 rainfall_dag = create_weather_dag("rainfall")
 tasmax_dag = create_weather_dag("tasmax")

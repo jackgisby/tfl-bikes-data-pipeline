@@ -17,6 +17,19 @@ BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
 
+def get_start_date_from_time(execution_date):
+    """
+    Gets the start date of the extracted data range
+
+    :param execution_date: Date of scheduled airflow run. A datetime object is automatically passed to 
+        this argument by airflow
+
+    :return: Date in "YYYYMM" format.
+    """
+
+    return (execution_date - timedelta(days=6)).strftime("%Y%m")
+
+
 def get_usage_file_names_from_time(execution_date):
     """
     Each (weekly) usage data file in the source bucket has a complex naming pattern including:
@@ -29,7 +42,8 @@ def get_usage_file_names_from_time(execution_date):
     :param execution_date: Date of scheduled airflow run. A datetime object is automatically passed to 
         this argument by airflow
     
-    :return: The formatted file name for the airflow run"s time period as a string.
+    :return: A tuple containing the formatted file name for the airflow run"s time period as a string
+        and the dataset start date in "YYYYMM" format.
     """
 
     # 2017 IDs start at 38 - this is added to the number of weeks since the first data chunk
@@ -46,6 +60,7 @@ def get_usage_file_names_from_time(execution_date):
     logging.info(f"Formatted dataset name: {formatted_dataset_name}")
 
     return formatted_dataset_name
+
 
 def format_to_parquet(csv_file_dir, csv_file_name):
     """
@@ -133,6 +148,15 @@ with DAG(
     }
 ) as ingest_bike_usage:
 
+    # Need to get the start date to save the output to the correct GCS folder
+    get_start_date = PythonOperator(
+        task_id = "get_start_date",
+        python_callable = get_start_date_from_time
+    )
+
+    data_date = "{{ ti.xcom_pull(task_ids='get_start_date') }}"
+    logging.info(f"Start date of the file's range (YYYYMM): {data_date}")
+
     # Get the name of the file using the date of the DAG run
     get_file_names = PythonOperator(
         task_id = "get_file_names",
@@ -171,18 +195,16 @@ with DAG(
     parquet_file_name = "{{ ti.xcom_pull(task_ids='convert_to_parquet') }}"
     logging.info(f"Pulled parquet name: {parquet_file_name}")
 
-    year_month = "{{ execution_date.strftime('%Y') }}{{ execution_date.strftime('%m') }}"
-    logging.info(f"YYYYMM: {year_month}")
-
     # The local data is transferred to the GCS 
     transfer_data_to_gcs = LocalFilesystemToGCSOperator(
         task_id = "transfer_data_to_gcs",
         src = f"{AIRFLOW_HOME}/{parquet_file_name}",
-        dst = f"rides_data/{year_month}/{parquet_file_name}",
+        dst = f"rides_data/{data_date}/{parquet_file_name}",
         bucket = GCP_GCS_BUCKET
     )
 
     get_file_names >> download_file_from_https >> convert_csv_header >> convert_to_parquet >> transfer_data_to_gcs
+    get_start_date >> transfer_data_to_gcs
 
 
 with DAG(
