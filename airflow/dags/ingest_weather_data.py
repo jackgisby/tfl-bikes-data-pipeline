@@ -143,12 +143,12 @@ def create_weather_dag(weather_type):
 
     ingest_weather_data = DAG(
         dag_id = f"ingest_{weather_type}_weather",
-        schedule_interval = "0 0 3 * *",
+        schedule_interval = "0 0 3 * *",  # Get previous month's data on the 3rd
         catchup = True,
         max_active_runs = 2,
         tags = [weather_type],
         start_date = datetime(2017, 2, 3),
-        end_date = datetime(2017, 3, 3),  # datetime(2022, 1, 3)
+        end_date = datetime(2017, 3, 3),  # datetime(2022, 2, 3)
         default_args = {
             "owner": "airflow",
             "depends_on_past": True,

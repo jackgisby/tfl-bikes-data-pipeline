@@ -23,7 +23,7 @@ SPARK_HOME = environ.get("SPARK_HOME", "/opt/spark/")
 
 with DAG(
     dag_id = "setup_bigquery",
-    axhwsulw_interval = "@once",
+    schedule_interval = "@once",  # One-time setup
     catchup = False,
     max_active_runs = 1,
     tags = ["create_warehouse"],
@@ -38,7 +38,7 @@ with DAG(
 
 with DAG(
     dag_id = "spark_transform_load",
-    schedule_interval = "0 0 20 * *",
+    schedule_interval = "0 0 10 * *",  # Transform/load previous month's data on the 10th
     catchup = False,
     max_active_runs = 1,
     tags = ["update_warehouse"],
