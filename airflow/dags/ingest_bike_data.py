@@ -171,11 +171,14 @@ with DAG(
     parquet_file_name = "{{ ti.xcom_pull(task_ids='convert_to_parquet') }}"
     logging.info(f"Pulled parquet name: {parquet_file_name}")
 
+    year_month = "{{ execution_date.strftime('%Y') }}{{ execution_date.strftime('%m') }}"
+    logging.info(f"YYYYMM: {year_month}")
+
     # The local data is transferred to the GCS 
     transfer_data_to_gcs = LocalFilesystemToGCSOperator(
         task_id = "transfer_data_to_gcs",
         src = f"{AIRFLOW_HOME}/{parquet_file_name}",
-        dst = f"rides_data/{parquet_file_name}",
+        dst = f"rides_data/{year_month}/{parquet_file_name}",
         bucket = GCP_GCS_BUCKET
     )
 

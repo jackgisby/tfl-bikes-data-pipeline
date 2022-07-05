@@ -4,7 +4,6 @@ from os import environ
 from datetime import datetime
 
 from airflow import DAG
-from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
 from airflow.providers.google.cloud.transfers.gcs_to_local import GCSToLocalFilesystemOperator
@@ -231,7 +230,7 @@ def create_weather_dag(weather_type):
         transfer_data_to_gcs = LocalFilesystemToGCSOperator(
             task_id = "transfer_data_to_gcs",
             src = f"{AIRFLOW_HOME}/{parquet_file_name}",
-            dst = f"weather_data/{weather_type}/{parquet_file_name}",
+            dst = f"weather_data/{weather_type}/{year}{month}/{parquet_file_name}",
             bucket = GCP_GCS_BUCKET
         )
 
