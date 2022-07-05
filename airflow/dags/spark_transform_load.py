@@ -1,14 +1,19 @@
 import logging
 from os import environ
 from datetime import datetime
+from json import load
 
 from airflow import DAG
 from airflow.utils.dates import days_ago
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
+from airflow.providers.google.cloud.operators.bigquery import BigQueryCreateEmptyDatasetOperator, \
+                                                              BigQueryCreateEmptyTableOperator
 from airflow.providers.google.cloud.operators.dataproc import DataprocCreateClusterOperator, \
                                                               DataprocSubmitPySparkJobOperator, \
                                                               DataprocDeleteClusterOperator
+
+from ingest_weather_data import get_previous_month_as_yyyymm
 
 
 # Get environment variables from the docker container pointing to the GCS project and data stores
@@ -17,33 +22,14 @@ GCP_GCS_BUCKET = environ.get("GCP_GCS_BUCKET")
 BIGQUERY_DATASET = environ.get("BIGQUERY_DATASET", "bikes_data_warehouse")
 GCP_PROJECT_DATAPROC_CLUSTER_NAME = environ.get("GCP_PROJECT_DATAPROC_CLUSTER_NAME", "bikes-cluster")
 GCS_REGION = environ.get("GCS_REGION", "europe-north1")
-GCS_REGION = "europe-west2"
 
 # Local folder within the docker container
 AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 SPARK_HOME = environ.get("SPARK_HOME", "/opt/spark/")
 
 # Whether to setup/deconstruct cluster resources or assume they are already present
-CREATE_INFRASTRUCTURE = bool(environ.get("CREATE_INFRASTRUCTURE", True))
+CREATE_INFRASTRUCTURE = environ.get("CREATE_INFRASTRUCTURE", "False").lower() in ("true", "1", "t")
 
-
-def get_previous_month_as_yyyymm(year, month):
-    """
-    Wrapper to the function `get_previous_month` that gets the output as a 
-    string in the format "YYYYMM".
-
-    :param year: A string representing the year (YYYY)
-
-    :param month: A string representing the month (MM)
-
-    :return: A string in the format "YYYYMM" with the date of the previous month.
-    """
-
-    from ingest_weather_data import get_previous_month
-
-    year, month, _ = get_previous_month(year, month)
-
-    return f"{year}{month}"
 
 def get_cluster_setup_task():
     "Creates a lightweight `DataprocCreateClusterOperator` task based on GCP variables."
@@ -67,6 +53,7 @@ def get_cluster_setup_task():
         }
     )
 
+
 def get_cluster_job_submission_task(file_name, additional_arguments=None):
     """
     Submits a spark job to an active cluster on GCP.
@@ -84,16 +71,17 @@ def get_cluster_job_submission_task(file_name, additional_arguments=None):
     job_arguments = [GCP_PROJECT_ID, GCP_GCS_BUCKET, BIGQUERY_DATASET]
 
     if additional_arguments:
-        job_arguments.append(additional_arguments)
+        job_arguments += additional_arguments
 
     return DataprocSubmitPySparkJobOperator(
         task_id = "submit_dataproc_spark_job_task",
-        main = f"gs://{GCP_GCS_BUCKET}/spark/{file_name}.py",
-        arguments = additional_arguments,
+        main = f"gs://{GCP_GCS_BUCKET}/spark/{file_name}",
+        arguments = job_arguments,
         cluster_name = GCP_PROJECT_DATAPROC_CLUSTER_NAME,
         region = GCS_REGION,
         dataproc_jars = ["gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.24.0.jar"]
     )
+
 
 def get_cluster_teardown_task():
     "Destroys a cluster using a `DataprocDeleteClusterOperator` task."
@@ -105,6 +93,7 @@ def get_cluster_teardown_task():
         region = GCS_REGION,
         trigger_rule = "all_done",
     )
+
 
 def get_pyspark_upload_task(file_name):
     """
@@ -122,6 +111,37 @@ def get_pyspark_upload_task(file_name):
         bucket = GCP_GCS_BUCKET
     )
 
+
+def create_bigquery_table(table_name, schema_fields, time_partitioning=None):
+    """
+    Create a BigQuery table within an existing dataset.
+
+    :param table_name: The name of the table to be created.
+
+    :param schema_fields: A list of fields, see `BigQueryCreateEmptyTableOperator`
+        for more details. A basic `schema_fields` object would be a list of 
+        dictionaries that each have the "name", "type" and "mode" keys. The name
+        indicates the column name, the type is the variable type (e.g. "INTEGER",
+        "STRING"), and the mode indicates the column mode (e.g. "REQUIRED", "NULLABLE").
+
+    :param time_partitioning: Table resources, see `BigQueryCreateEmptyTableOperator`.
+        Can be used to indicate table partitioning, for instance by suppling
+        the following object to the `time_partitioning` argument:
+        `time_partitioning = {"type": "MONTH", "field": "end_timestamp"}`
+
+    :return A `BigQueryCreateEmptyTableOperator` task.
+    """
+
+    return BigQueryCreateEmptyTableOperator(
+        task_id = f"create_{table_name}",
+        project_id = GCP_PROJECT_ID,
+        dataset_id = BIGQUERY_DATASET,
+        table_id = table_name,
+        schema_fields = schema_fields,
+        time_partitioning = time_partitioning
+    )
+
+
 with DAG(
     dag_id = "setup_bigquery",
     schedule_interval = "@once",  # One-time setup
@@ -135,21 +155,55 @@ with DAG(
         "retries": 0,
     }
 ) as setup_bigquery:
-    
+
+    # Create the empty BigQuery dataset
+    create_bigquery_dataset = BigQueryCreateEmptyDatasetOperator(
+        task_id = "create_bigquery_dataset",
+        project_id = GCP_PROJECT_ID,
+        dataset_id = BIGQUERY_DATASET,
+        location = GCS_REGION
+    )
+
+    # Now create the empty tables within the dataset, using saved json schema
+    create_fact_journey = create_bigquery_table(
+        table_name = "fact_journey", 
+        schema_fields = load(open(f"{AIRFLOW_HOME}/schema/fact_schema.json", "r")),
+        time_partitioning = {"type": "MONTH", "field": "end_timestamp"}
+    )
+
+    create_dim_rental = create_bigquery_table(
+        table_name = "dim_rental", 
+        schema_fields = load(open(f"{AIRFLOW_HOME}/schema/rental_schema.json", "r"))
+    )
+
+    create_dim_weather = create_bigquery_table(
+        table_name = "dim_weather", 
+        schema_fields = load(open(f"{AIRFLOW_HOME}/schema/weather_schema.json", "r")),
+        time_partitioning = {"type": "MONTH", "field": "timestamp"}
+    )
+
+    # Create tables after creating the dataset
+    create_bigquery_dataset >> create_fact_journey
+    create_bigquery_dataset >> create_dim_rental
+    create_bigquery_dataset >> create_dim_weather
+
+    # Tables are ready now, so we can upload the pyspark file and submit it to dataproc
     upload_pyspark_file = get_pyspark_upload_task("setup_database.py")
 
-    if CREATE_INFRASTRUCTURE:
-        create_cluster = get_cluster_teardown_task()
-
+    # All the dependencies are ready, submit the spark job
     submit_dataproc_spark_job_task = get_cluster_job_submission_task("setup_database.py")
-    
-    if CREATE_INFRASTRUCTURE:
-        delete_cluster = get_cluster_teardown_task()
-
     upload_pyspark_file >> submit_dataproc_spark_job_task
+    create_fact_journey >> submit_dataproc_spark_job_task
+    create_dim_rental >> submit_dataproc_spark_job_task
+    create_dim_weather >> submit_dataproc_spark_job_task
 
+    # If the dataproc cluster has not already been created, we can set
+    # it up and tear it down before and after submitting the job, respectively
     if CREATE_INFRASTRUCTURE:
+        create_cluster = get_cluster_setup_task()
+        delete_cluster = get_cluster_teardown_task()
         create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
+
 
 with DAG(
     dag_id = "spark_transform_load",
@@ -157,7 +211,8 @@ with DAG(
     catchup = True,
     max_active_runs = 1,
     tags = ["update_warehouse"],
-    start_date = datetime(2017, 1, 20),
+    start_date = datetime(2017, 1, 10),
+    end_date = datetime(2017, 2, 10),  # datetime(2022, 1, 10)
     default_args = {
         "owner": "airflow",
         "depends_on_past": False,
@@ -170,30 +225,27 @@ with DAG(
     # Get the month (in YYYYMM format) of the current DAG run
     get_previous_month = PythonOperator(
         task_id = "get_previous_month",
-        python_callable = get_previous_month_as_yyyymm,
-        op_kwargs = {
-            "year": "{{ execution_date.strftime('%Y') }}", 
-            "month": "{{ execution_date.strftime('%m') }}"
-        }
+        python_callable = get_previous_month_as_yyyymm
     )
 
-    yyyymm = "{{ ti.xcom_pull(task_ids='get_previous_month') }}"
-    logging.info(f"YYYYMM: {yyyymm}")
+    data_date = "{{ ti.xcom_pull(task_ids='get_previous_month') }}"
+    logging.info(f"YYYYMM: {data_date}")
 
-    if CREATE_INFRASTRUCTURE:
-        create_cluster = get_cluster_setup_task()
-
-    # Submit job with an additional argument: The year and month ("YYYYMM") of the data
+    # Submit dataproc job with an additional argument: 
+    # The year and month ("YYYYMM") of the data to be transformed and loaded
+    # If this is the first time running this DAG, use overwrite mode for BigQuery
     submit_dataproc_spark_job_task = get_cluster_job_submission_task(
         "transform_load.py", 
-        additional_arguments = [yyyymm]
+        additional_arguments = [data_date]
     )
 
-    if CREATE_INFRASTRUCTURE:
-        delete_cluster = get_cluster_teardown_task()
-
+    # These are the dependencies of the dataproc job
     upload_pyspark_file >> submit_dataproc_spark_job_task
     get_previous_month >> submit_dataproc_spark_job_task
-    
+
+    # If the dataproc cluster has not already been created, we can set
+    # it up and tear it down before and after submitting the job, respectively
     if CREATE_INFRASTRUCTURE:
+        create_cluster = get_cluster_setup_task()
+        delete_cluster = get_cluster_teardown_task()
         create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
