@@ -37,12 +37,14 @@ def get_usage_file_names_from_time(execution_date):
         - The start date of the file, e.g. 04Jan2017
         - The end date of the file, e.g. 10Jan2017
 
-    Here, we calculate these fields from the execution date
+    Here, we calculate these fields from the execution date.
+
+    Some datasets have inconsistent names, and some are not even saved as CSV.
 
     :param execution_date: Date of scheduled airflow run. A datetime object is automatically passed to 
         this argument by airflow
     
-    :return: A tuple containing the formatted file name for the airflow run"s time period as a string
+    :return: The formatted file name for the airflow run"s time period as a string
         and the dataset start date in "YYYYMM" format.
     """
 
@@ -50,13 +52,31 @@ def get_usage_file_names_from_time(execution_date):
     dataset_id = 38 + ((execution_date - datetime(2017, 1, 3, 20, tzinfo=execution_date.tzinfo)).days // 7)
     logging.info(f"The dataset's ID is {dataset_id}")
 
+    # Naming convention has spaces for certain dates
+    after_id, after_journey, after_data, after_extract = "", "", "", ""
+
+    if dataset_id in (50, 51, 52):
+        after_id, after_journey, after_data, after_extract = " ", " ", " ", " "
+    elif dataset_id == 55:
+        after_data = " "
+    elif dataset_id == 56:
+        after_extract = " "
+
+    journey_data_extract = f"{after_id}Journey{after_journey}Data{after_data}Extract{after_extract}"
+
     # Get the start and end ranges of the data (execution_date refers to the end of the data range)
     dataset_start_range = (execution_date - timedelta(days=6)).strftime("%d%b%Y")
     dataset_end_range = execution_date.strftime("%d%b%Y")
     logging.info(f"Will extract data for the time period {dataset_start_range} to {dataset_end_range}")
 
+    # Dataset 49 is saved as a .xlsx file
+    if dataset_id == 49:
+        file_ext = ".xlsx"
+    else:
+        file_ext = ".csv"
+
     # Get the properly formatted dataset name
-    formatted_dataset_name = f"{dataset_id}JourneyDataExtract{dataset_start_range}-{dataset_end_range}.csv"
+    formatted_dataset_name = f"{dataset_id}{journey_data_extract}{dataset_start_range}-{dataset_end_range}.{file_ext}"
     logging.info(f"Formatted dataset name: {formatted_dataset_name}")
 
     return formatted_dataset_name
@@ -140,7 +160,7 @@ with DAG(
     max_active_runs = 3,
     tags = ["bike_usage"],
     start_date = datetime(2017, 1, 3, 20),
-    end_date = datetime(2017, 1, 24, 20),  # datetime(2022, 1, 4, 20)
+    end_date = datetime(2022, 1, 4, 20),
     default_args = {
         "owner": "airflow",
         "depends_on_past": True,
