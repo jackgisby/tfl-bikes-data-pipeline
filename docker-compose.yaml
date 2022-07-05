@@ -58,6 +58,7 @@ x-airflow-common:
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - ./spark:/opt/spark/
+    - ./assets/schema/:/opt/airflow/schema
     - ~/.google/credentials/:/.google/credentials:ro
 
   user: "${AIRFLOW_UID:-50000}:0"
