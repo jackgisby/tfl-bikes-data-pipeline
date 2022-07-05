@@ -25,11 +25,36 @@ def get_column_types_from_df(df):
     """
     Prints the column types of a spark dataframe to logger.
 
-    :param df: A spark dataframe.
+    :param df: A spark RDD.
     """
 
     for column_name in df.schema.names:
         logger.info(f"{column_name}: {df.schema[column_name].dataType}")
+
+def send_to_bigquery(df, additional_options=None, mode="append"):
+    """
+    Sends a spark RDD to BigQuery to create a new table. 
+
+    :param df: A spark RDD to be uploaded to BigQuery.
+
+    :param additional_options: Used to add options to the BigQuery write (using spark's `.option`
+        function). Must be a dictionary whose keys are the names of options for the bigquery write
+        and values are the values to be set for those options.
+
+    :param mode: A string to be sent to the spark's `.mode` function. Can be set to "append" in order
+        to append to a new table, or "overwrite" to create a new table or overwite an existing one.
+    """
+    
+    # Append data to pre-existing BigQuery table
+    df = df.write.format("bigquery") \
+        .mode(mode) \
+        .option("project", GCP_PROJECT_ID) \
+        .option("dataset", BIGQUERY_DATASET) 
+
+    for option_name, option_value in additional_options.items():
+        df = df.option(option_name, option_value)
+
+    df = df.save()
 
 def get_timestamp_dimension(spark):
     """ 
@@ -94,19 +119,6 @@ def get_locations_data(spark, file_name):
     df.show()
 
     return df
-
-def send_to_bigquery(df, additional_options=None, mode="append"):
-    
-    # Append data to pre-existing BigQuery table
-    df = df.write.format("bigquery") \
-        .mode(mode) \
-        .option("project", GCP_PROJECT_ID) \
-        .option("dataset", BIGQUERY_DATASET) 
-
-    for option_name, option_value in additional_options.items():
-        df = df.option(option_name, option_value)
-
-    df = df.save()
 
 def main():
     
