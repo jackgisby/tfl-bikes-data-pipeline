@@ -1,6 +1,6 @@
 import logging
 from os import environ
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -27,7 +27,17 @@ def get_start_date_from_time(execution_date):
     :return: Date in "YYYYMM" format.
     """
 
-    return (execution_date - timedelta(days=6)).strftime("%Y%m")
+    # Some weeks have +1 or -1 days
+    if execution_date.date() == date(2017, 8, 22):
+        days = 7
+
+    elif execution_date.date() == date(2017, 8,  1):
+        days = 5
+
+    else:
+        days = 6
+
+    return (execution_date - timedelta(days=days)).strftime("%Y%m")
 
 
 def get_usage_file_names_from_time(execution_date):
@@ -49,24 +59,47 @@ def get_usage_file_names_from_time(execution_date):
     """
 
     # 2017 IDs start at 38 - this is added to the number of weeks since the first data chunk
-    dataset_id = 38 + ((execution_date - datetime(2017, 1, 3, 20, tzinfo=execution_date.tzinfo)).days // 7)
+    dataset_id = 38 + ((execution_date.date() - date(2017, 1, 3)).days // 7)
+
+    # Two weeks in a row have the same ID, so reduce by one after this point
+    if execution_date.date() >= date(2021, 1, 5):
+        dataset_id -= 1
+    
     logging.info(f"The dataset's ID is {dataset_id}")
 
     # Naming convention has spaces for certain dates
     after_id, after_journey, after_data, after_extract = "", "", "", ""
+    space_char = "%20"
 
     if dataset_id in (50, 51, 52):
-        after_id, after_journey, after_data, after_extract = " ", " ", " ", " "
+        after_id, after_journey, after_data, after_extract = space_char, space_char, space_char, space_char
     elif dataset_id == 55:
-        after_data = " "
+        after_data = space_char
     elif dataset_id == 56:
-        after_extract = " "
+        after_extract = space_char
 
     journey_data_extract = f"{after_id}Journey{after_journey}Data{after_data}Extract{after_extract}"
 
     # Get the start and end ranges of the data (execution_date refers to the end of the data range)
+
     dataset_start_range = (execution_date - timedelta(days=6)).strftime("%d%b%Y")
     dataset_end_range = execution_date.strftime("%d%b%Y")
+
+    # Some weeks have 6 or 8 days according to the data source, make adjustments
+    ranges_with_early_starts = [date(2017, 8,  day) for day in [8, 15, 22]]
+    ranges_with_early_ends = [date(2017, 8,  day) for day in [1, 8, 15]]
+    
+    if execution_date.date() in ranges_with_early_starts:
+        dataset_start_range = (execution_date - timedelta(days=7)).strftime("%d%b%Y")  
+
+    if execution_date.date() in ranges_with_early_ends:
+        dataset_end_range = (execution_date - timedelta(days=1)).strftime("%d%b%Y")
+
+    # In 2018, June is used instead of Jun and July in place of Jul
+    if 100 < dataset_id < 150:
+        dataset_start_range = dataset_start_range.replace("Jun", "June").replace("Jul", "July")
+        dataset_end_range = dataset_end_range.replace("Jun", "June").replace("Jul", "July")
+
     logging.info(f"Will extract data for the time period {dataset_start_range} to {dataset_end_range}")
 
     # Dataset 49 is saved as a .xlsx file
@@ -76,10 +109,56 @@ def get_usage_file_names_from_time(execution_date):
         file_ext = ".csv"
 
     # Get the properly formatted dataset name
-    formatted_dataset_name = f"{dataset_id}{journey_data_extract}{dataset_start_range}-{dataset_end_range}.{file_ext}"
+    formatted_dataset_name = f"{dataset_id}{journey_data_extract}{dataset_start_range}-{dataset_end_range}{file_ext}"
     logging.info(f"Formatted dataset name: {formatted_dataset_name}")
 
     return formatted_dataset_name
+
+
+def format_to_csv(file_dir, file_name):
+    """
+    Some datasets are saved as XLSX rather than CSV. This function converts them
+    to CSV in the case they are not already.
+
+    :param file_dir: The directory in which the file is stored.
+
+    :param file_name: The name of the file to be converted.
+
+    :return: The name of the CSV file, saved within `file_dir`.
+    """
+
+    # Convert from excel if necessary
+    if file_name.lower().endswith(".xlsx"): 
+
+        csv_file_name = file_name.replace(".xlsx", ".csv")
+
+        # Import here as we don't want to import at top of file for Airflow
+        import pandas as pd
+        
+        df = pd.read_excel(f"{file_dir}/{file_name}")
+        df.to_csv(f"{file_dir}/{csv_file_name}", sep=",", index=False)
+
+    elif file_name.lower().endswith(".csv"):
+
+        csv_file_name = file_name
+
+    else:
+        raise TypeError("File ends with an unknown extension.")
+
+    logging.info(f"CSV file name: {csv_file_name}")
+
+    # Remove spaces in file name if there are any
+    csv_file_name_without_spaces = csv_file_name.replace("%20", "").replace(" ", "")
+    logging.info(f"CSV file name without spaces: {csv_file_name_without_spaces}")
+
+    if csv_file_name != csv_file_name_without_spaces:
+
+        # Import here as we don't want to import at top of file for Airflow
+        from shutil import copyfile
+
+        copyfile(csv_file_name, csv_file_name_without_spaces)
+
+    return csv_file_name_without_spaces
 
 
 def format_to_parquet(csv_file_dir, csv_file_name):
@@ -87,13 +166,17 @@ def format_to_parquet(csv_file_dir, csv_file_name):
     Converts a CSV file to a parquet file. Parquet files are ideal because they allow for
     efficient data compression while allowing queries to read only the necessary columns.
 
-    :param csv_file_name: The CSV file to be converted.
+    :param csv_file_dir: The directory in which the CSV file is stored.
+
+    :param csv_file_name: The name of the CSV file to be converted.
+
+    :return: The name of the parquet file, saved within `csv_file_dir`.
     """
 
     if not csv_file_name.lower().endswith(".csv"):
         raise TypeError("Can only convert CSV files to parquet")
 
-    # Import pyarrow within task
+    # Import here as we don't want to import at top of file for Airflow
     from pyarrow.csv import read_csv
     from pyarrow.parquet import write_table
 
@@ -117,6 +200,7 @@ def reformat_locations_xml(xml_file_dir, xml_file_name):
         raise TypeError("Can only extract data from XML files")
 
     # Modules for converting xml to csv
+    # Import here as we don't want to import at top of file for Airflow
     import csv
     from xml.etree import ElementTree
 
@@ -155,16 +239,16 @@ def reformat_locations_xml(xml_file_dir, xml_file_name):
 
 with DAG(
     dag_id = "ingest_bike_usage",
-    schedule_interval = "0 20 * * 2",  # Every week
+    schedule_interval = "0 23 * * 2",  # Every week
     catchup = True,
     max_active_runs = 3,
     tags = ["bike_usage"],
-    start_date = datetime(2017, 1, 3, 20),
-    end_date = datetime(2022, 1, 4, 20),
+    start_date = datetime(2017, 3, 3, 20),
+    end_date = datetime(2022, 1, 4, 20),  
     default_args = {
         "owner": "airflow",
         "depends_on_past": True,
-        "retries": 0,
+        "retries": 0
     }
 ) as ingest_bike_usage:
 
@@ -184,20 +268,37 @@ with DAG(
     )
 
     # Get the return value of the get_file_names task
-    csv_file_name = "{{ ti.xcom_pull(task_ids='get_file_names') }}"
-    logging.info(f"Pulled csv name: {csv_file_name}")
+    file_name = "{{ ti.xcom_pull(task_ids='get_file_names') }}"
+    logging.info(f"Pulled csv name: {file_name}")
 
     # The week"s data is downloaded to the local machine
     download_file_from_https = BashOperator(
         task_id = "download_file_from_https",
-        bash_command = f"curl -sSLf https://cycling.data.tfl.gov.uk/usage-stats/{csv_file_name} > {AIRFLOW_HOME}/{csv_file_name}"
+        bash_command = f"curl -sSLf 'https://cycling.data.tfl.gov.uk/usage-stats/{file_name}' > {AIRFLOW_HOME}/{file_name}"
     )
+
+    # A minority of files are saved as .xlsx rather than .csv
+    # This function will convert them to CSV format
+    convert_to_csv = PythonOperator(
+        task_id = "convert_to_csv",
+        python_callable = format_to_csv,
+        op_kwargs = {
+            "file_dir": AIRFLOW_HOME,
+            "file_name": file_name
+        }
+    )
+
+    # Get the new dataset name after conversion to parquet
+    csv_file_name = "{{ ti.xcom_pull(task_ids='convert_to_csv') }}"
+    logging.info(f"Pulled CSV name: {csv_file_name}")
 
     # Remove spaces from file header
     convert_csv_header = BashOperator(
         task_id = "convert_csv_header",
         bash_command = f"""new_header='Rental_Id,Duration,Bike_Id,End_Date,EndStation_Id,EndStation_Name,Start_Date,StartStation_Id,StartStation_Name'
                            sed -i "1s/.*/$new_header/" {AIRFLOW_HOME}/{csv_file_name}
+                           head {AIRFLOW_HOME}/{csv_file_name}
+                           tail {AIRFLOW_HOME}/{csv_file_name}
                         """
     )
 
@@ -223,7 +324,8 @@ with DAG(
         bucket = GCP_GCS_BUCKET
     )
 
-    get_file_names >> download_file_from_https >> convert_csv_header >> convert_to_parquet >> transfer_data_to_gcs
+    get_file_names >> download_file_from_https >> convert_to_csv >> convert_csv_header
+    convert_csv_header >> convert_to_parquet >> transfer_data_to_gcs
     get_start_date >> transfer_data_to_gcs
 
 
@@ -247,7 +349,7 @@ with DAG(
     # We only extract the static data concerning the bike pickup/dropoff locations
     download_file_from_https = BashOperator(
         task_id = "download_file_from_https",
-        bash_command = f"curl -sSLf https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/{xml_file_name} > {AIRFLOW_HOME}/{xml_file_name}"
+        bash_command = f"curl -sSLf 'https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/{xml_file_name}' > {AIRFLOW_HOME}/{xml_file_name}"
     )
 
     # Data is an XML, so we extract the desired fields into a CSV

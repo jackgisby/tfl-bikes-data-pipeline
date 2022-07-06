@@ -30,6 +30,7 @@ def get_previous_month(execution_date):
         month's month (str) and the final day of the previous month (str).
     """
 
+    # Import here as we don't want to import at top of file for Airflow
     from calendar import monthrange
 
     # Get variables as integers and remove 1 from month
@@ -94,6 +95,7 @@ def get_ftp_dataset(host, location, out_file):
     """
 
     # Use ftplib to connect and download files
+    # Import here as we don't want to import at top of file for Airflow
     import ftplib
 
     # Open the connection to the host using environment login variables
@@ -114,7 +116,8 @@ def reformat_netcdf(file_name, weather_type):
 
     :return: The name of the created CSV file.
     """
-
+    
+    # Import here as we don't want to import at top of file for Airflow
     import numpy as np  
     import pandas as pd
     import netCDF4 as nc
