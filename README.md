@@ -1,9 +1,7 @@
 Transport for London Santander Cycles Data Pipeline
 ===================================================
 
-# About the data
-
-# About the pipeline
+# An overview of the pipeline
 
 ## Processing stages
 
@@ -11,13 +9,18 @@ Transport for London Santander Cycles Data Pipeline
 
 ## Dashboard
 
-# Running the pipeline
+# Pipeline documentation
 
-- Create gcloud account, project, and user with appropriate permissions
-- Install terraform, gcloud CDK, docker, docker-compose onto local or virtual machine
-- Add gcloud credentials (~/.google/credentials/google_credentials.json) and as environment variable, then authorise
-- Terraform
-- Airflow
+For a more detailed explanation of the pipeline and instructions on how to setup the pipeline yourself, refer to the following documents:
+
+1. [Setup a google cloud project](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/1_setup_gcp.md)
+2. [Setup a local or virtual machine](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/2_setup_environment.md)
+3. [Create google cloud resources](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/3_create_gcp_resources.md)
+4. [Data ingestion](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/4_data_ingestion.md)
+5. [Data transformation](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/5_data_transformation.md)
+6. [Data visualisation](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/6_data_visualisation.md)
+
+We also provide a more detailed [description of the datasets](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/data_sources.md) processed by the pipeline, further information on how the [integrated data is stored in BigQuery](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/integrated_database.md) and a discussion of the [limitations and future directions](https://github.com/jackgisby/tfl_bikes_data_pipeline/blob/main/limitations_and_directions.md) of the pipeline.
 
 # License
 
