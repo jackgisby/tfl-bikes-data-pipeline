@@ -38,7 +38,7 @@ The same dashboard is shown below, for the same date range but limited to the fo
   <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/bikes_dashboard_top_four_destinations.png?raw=true" />
 </p>
 
-A second dashboard was created to demonstrate a simple example of how the cycle data can be combined with the weather data. This dashboard has the same filtering methods as the main dashboard, however the date range of 2018-2019 was selected. Both the number of cycling journeys undertaken and the average maximum/minimum temperatures for the docking stations follows a very similar pattern. It is probable that customers are less likely to travel by bike when the weather is poor. 
+A second dashboard was created to demonstrate a simple example of how the cycle data can be combined with the weather data. This dashboard has the same filtering methods as the main dashboard, however the date range of 2018-2019 was selected and the search was restricted to journeys starting from "Hop Exchange, The Borough". Both the number of cycling journeys undertaken and the daily maximum/minimum temperatures for the docking stations follows a very similar pattern. It is probable that customers are less likely to travel by bike when the weather is poor. 
 
 <p align="center">
   <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/weather_integration.png?raw=true" />
