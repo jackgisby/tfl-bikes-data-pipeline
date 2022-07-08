@@ -78,24 +78,24 @@ As new data is ingested and stored, it must be transformed and loaded to the Big
 
 If there is not already a Dataproc cluster available, one is temporarily created for the purposes of submitting the spark job. The current spark script is also uploaded. A function is used to get the date range of the data that will be processed, before the spark job is submitted to process these data. 
 
-For further information about the workflow scheduling, see [the docs](docs/2_data_ingestion.md).
+For more information about the workflow scheduling or to view the other DAGs, see [the docs](docs/2_data_ingestion.md).
 
 # Pipeline documentation
 
 For a more detailed explanation of the pipeline and instructions on how to setup the pipeline yourself, refer to the following documents:
 
-1. [Setup](docs/1_setup_gcp.md)
+1. [Setup](docs/1_setup.md)
 4. [Data ingestion](docs/2_data_ingestion.md)
 5. [Data transformation](docs/3_data_transformation.md)
 6. [Data visualisation](docs/4_data_visualisation.md)
 7. [Automated testing](docs/5_automated_testing.md)
 
-We also provide a [more detailed description of the datasets](docs/data_sources.md) processed by the pipeline, further information on [how the integrated data is stored in BigQuery](docs/integrated_database.md) and a [discussion of the limitations and future directions](docs/limitations_and_directions.md) of the pipeline.
+We also provide a [more detailed description of the datasets](docs/data_sources.md) processed by the pipeline and a [discussion of the limitations and future directions](docs/limitations_and_directions.md) of the pipeline.
 
 # License
 
 The data processing pipeline is licensed under the GNU General Public License v3.0 (see [LICENSE file](LICENSE) for licensing information).
 
-The bike rental data is [powered by TfL open data](https://tfl.gov.uk/corporate/terms-and-conditions/transport-data-service). These data contain Ordnance Survery-derived data (© Crown copyright and database rights 2016) and Geomni UK Map data (© and database rights [2019]).
+The bike rental data is [powered by TfL open data](https://tfl.gov.uk/corporate/terms-and-conditions/transport-data-service). These data contain Ordnance Survery-derived data (© Crown copyright and database rights 2016) and Geomni UK Map data (© and database rights 2019).
 
 Weather data was obtained from the [CEDA Archive's HADUK-Grid regional climate observations](https://catalogue.ceda.ac.uk/uuid/4dc8450d889a491ebb20e724debe2dfb), licensed under the [Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
