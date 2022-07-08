@@ -7,16 +7,20 @@ This repository contains a batch processing pipeline that uses the Google Cloud 
 
 # Overview of the pipeline
 
-The pipeline is setup on GCP to ingest each dataset as it is released and perform a monthly transformation/integration in order to provide up-to-date data for performing analytics. In this README, an overview of the pipeline is provided; for further information, see the [docs](docs/).
+The pipeline is setup on GCP to ingest each dataset as it is released and perform a monthly transformation/integration in order to provide up-to-date data for performing analytics. In this README, an overview of the pipeline is provided; for further information, see the [docs](docs/). The project is designed as per the diagram, below. Airflow, hosted by Docker, is used to orchestrate the running of the pipeline. Ingestion to Google Cloud Storage (GCS) is carried out by Airflow as new data is released. Every month, Airflow creates a Spark job to transform and integrate the various data before appending the current month's data to BigQuery. Finally, Data Studio is used to visualise the database as a dashboard.
 
-The pipeline solves a number of challenges. For instance, while TfL's unified API is consistent, the data format and properties for the historical cycling data is not. The cycling data processed by the pipeline includes CSV, XML and XLS files. Furthermore, the weather data was stored in NetCDF format, which needed to be transformed to a compatible data type and integrated with the cycles data using latitude and longitude. Additionally, while the cycling data is released weekly, the weather data is released monthly, so the data was ingested separately before being combined in the final database.
+<p align="center">
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/pipeline_structure.png?raw=true" />
+</p>
 
-To achieve this, the following technologies were used:
-- __GCP:__ Various google cloud services were used, including Cloud Storage, Compute Engine, BigQuery, Dataproc and Data Studio. 
+The technologies in the diagram are also listed below:
+- __GCP:__ Various google cloud services were used, including GCS, Compute Engine, BigQuery, Dataproc and Data Studio. 
 - __Terraform:__ Terraform was used to manage GCP resources.
 - __Docker:__ Docker was used to host Airflow. 
 - __Airflow:__ Airflow was used to orchestrate the data ingestion steps and the submission of Spark jobs to GCP.
-- __Spark:__ Spark was used to carry out to transform and integrate the cycle and weather data, before loading them to BigQuery.
+- __Spark:__ Spark was used to transform and integrate the locations, cycle and weather data, before loading them to BigQuery.
+
+The pipeline solves a number of challenges. For instance, while TfL's unified API is consistent, the data format and properties for the historical cycling data is not. The cycling data processed by the pipeline includes CSV, XML and XLS files. Furthermore, the weather data was stored in NetCDF format, which needed to be transformed to a compatible data type and integrated with the cycles data using latitude and longitude. Additionally, while the cycling data is released weekly, the weather data is released monthly, so the data is ingested separately before being combined into the final database at regular intervals.
 
 Development of this project was restricted by the length of the GCP free trial. See the docs for a [discussion of limitations and future directions](docs/limitations_and_directions.md) for the pipeline.
 
@@ -40,7 +44,7 @@ A second dashboard was created to demonstrate a simple example of how the cycle 
   <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/weather_integration.png?raw=true" />
 </p>
 
-For further information about the dashboards, see [the docs](docs/6_data_visualisation.md).
+For further information about the dashboards, see [the docs](docs/4_data_visualisation.md).
 
 ## Database
 
@@ -54,7 +58,7 @@ The weather data is also stored such that it has an ID (`timestamp_id`) referenc
 
 Since the data is uploaded in monthly intervals, and we expect analysts will only need to extract data for particular month ranges, we make use of partitioned BigQuery tables. A monthly partitioning is used for the journey, weather and timestamp tables.
 
-For further information about the database construction and structure, see [the docs](docs/5_data_transformation.md).
+For further information about the database construction and structure, see [the docs](docs/3_data_transformation.md).
 
 ## Scheduling
 
@@ -74,19 +78,17 @@ As new data is ingested and stored, it must be transformed and loaded to the Big
 
 If there is not already a Dataproc cluster available, one is temporarily created for the purposes of submitting the spark job. The current spark script is also uploaded. A function is used to get the date range of the data that will be processed, before the spark job is submitted to process these data. 
 
-For further information about the workflow scheduling, see [the docs](docs/4_data_ingestion.md).
+For further information about the workflow scheduling, see [the docs](docs/2_data_ingestion.md).
 
 # Pipeline documentation
 
 For a more detailed explanation of the pipeline and instructions on how to setup the pipeline yourself, refer to the following documents:
 
-1. [Setup a google cloud project](docs/1_setup_gcp.md)
-2. [Setup a local or virtual machine](docs/2_setup_environment.md)
-3. [Create google cloud resources](docs/3_create_gcp_resources.md)
-4. [Data ingestion](docs/4_data_ingestion.md)
-5. [Data transformation](docs/5_data_transformation.md)
-6. [Data visualisation](docs/6_data_visualisation.md)
-7. [Automated testing](docs/7_automated_testing.md)
+1. [Setup](docs/1_setup_gcp.md)
+4. [Data ingestion](docs/2_data_ingestion.md)
+5. [Data transformation](docs/3_data_transformation.md)
+6. [Data visualisation](docs/4_data_visualisation.md)
+7. [Automated testing](docs/5_automated_testing.md)
 
 We also provide a [more detailed description of the datasets](docs/data_sources.md) processed by the pipeline, further information on [how the integrated data is stored in BigQuery](docs/integrated_database.md) and a [discussion of the limitations and future directions](docs/limitations_and_directions.md) of the pipeline.
 
