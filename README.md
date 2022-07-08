@@ -3,7 +3,7 @@ Transport for London Santander Cycles Data Pipeline
 
 In partnership with Santander, Transport for London (TfL) operate a public cycle hire scheme in London. At time of writing, there are over 11,000 bikes in operation at over 700 docking stations. The annual number of journeys undertaken on these bikes exceeded 10 million in 2021. TfL make available a [unified API](https://tfl.gov.uk/info-for/open-data-users/unified-api) to facilitate the open sharing of data for many modes of transportation. They have also made available [a bucket](https://cycling.data.tfl.gov.uk/) containing historical data detailing each of the journeys undertaken since 2015.
 
-In this repository, we have created a data pipeline using the Google Cloud Platform (GCP) that aims to extract TfL cycle data from multiple sources and combines it into a single database for analytics applications. The pipeline also integrates the cycle data with [weather data from the Met Office](https://catalogue.ceda.ac.uk/uuid/4dc8450d889a491ebb20e724debe2dfb) to identify the weather conditions for each journey and cycle station. 
+This repository contains a batch processing pipeline that uses the Google Cloud Platform (GCP) to extract TfL cycle data from multiple sources and combines it into a single database for analytics applications. In the primary dataset, each data point details a time and location for both the start and end of the journey. The pipeline also integrates the cycle data with [weather data from the Met Office](https://catalogue.ceda.ac.uk/uuid/4dc8450d889a491ebb20e724debe2dfb). Weather observations (rainfall, maximum temperature and minimum temperature) are interpolated onto a uniform grid (1km by 1km); the pipeline merges weather data over time for each cycle station using its nearest point on the grid. 
 
 # Overview of the pipeline
 
@@ -18,7 +18,7 @@ To achieve this, the following technologies were used:
 - __Airflow:__ Airflow was used to orchestrate the data ingestion steps and the submission of Spark jobs to GCP.
 - __Spark:__ Spark was used to carry out to transform and integrate the cycle and weather data, before loading them to BigQuery.
 
-The development time of this pipeline was limited by the length of the GCP free trial. See the docs for a [discussion of limitations and future directions](docs/limitations_and_directions.md) for the pipeline.
+Development of this project was restricted by the length of the GCP free trial. See the docs for a [discussion of limitations and future directions](docs/limitations_and_directions.md) for the pipeline.
 
 ## Dashboards
 
@@ -86,8 +86,9 @@ For a more detailed explanation of the pipeline and instructions on how to setup
 4. [Data ingestion](docs/4_data_ingestion.md)
 5. [Data transformation](docs/5_data_transformation.md)
 6. [Data visualisation](docs/6_data_visualisation.md)
+7. [Automated testing](docs/7_automated_testing.md)
 
-We also provide a more detailed [description of the datasets](docs/data_sources.md) processed by the pipeline, further information on how the [integrated data is stored in BigQuery](docs/integrated_database.md) and a discussion of the [limitations and future directions](docs/limitations_and_directions.md) of the pipeline.
+We also provide a [more detailed description of the datasets](docs/data_sources.md) processed by the pipeline, further information on [how the integrated data is stored in BigQuery](docs/integrated_database.md) and a [discussion of the limitations and future directions](docs/limitations_and_directions.md) of the pipeline.
 
 # License
 
