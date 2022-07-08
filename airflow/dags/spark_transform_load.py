@@ -28,7 +28,7 @@ AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 SPARK_HOME = environ.get("SPARK_HOME", "/opt/spark/")
 
 # Whether to setup/deconstruct cluster resources or assume they are already present
-CREATE_INFRASTRUCTURE = environ.get("CREATE_INFRASTRUCTURE", "False").lower() in ("true", "1", "t")
+CREATE_INFRASTRUCTURE = environ.get("CREATE_INFRASTRUCTURE", "True").lower() in ("true", "1", "t")
 
 
 def get_cluster_setup_task():
