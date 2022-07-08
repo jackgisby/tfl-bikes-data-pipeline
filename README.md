@@ -25,19 +25,19 @@ The development time of this pipeline was limited by the length of the GCP free 
 To demonstrate how the pipeline can be used for analytics, GCP's Data Studio was used to create some simple dashboards. The main dashboard, visualised below, shows information for the cycle journeys. The journeys can be filtered by their date and by both the start and end docking station. The locations of the docking stations are shown in google maps, the number of journeys over time are displayed and the number of journeys for the most population destinations are shown. For the time period of 2018-2021, there were 41.2 million journeys undertaken!
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/tree/main/assets/bikes_dashboard.png" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/bikes_dashboard.png?raw=true" />
 </p>
 
 The same dashboard is shown below, for the same date range but limited to the four most popular destinations. Despite only 4/750 locations being selected, there were still ~1 million journeys ending at these stations. As shown by the map, these stations are unsurprisingly located in fairly central locations. You might also notice a drop in journeys after March 2020, when the lockdowns began. 
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/tree/main/assets/bikes_dashboard_top_four_destinations.png" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/bikes_dashboard_top_four_destinations.png?raw=true" />
 </p>
 
 A second dashboard was created to demonstrate a simple example of how the cycle data can be combined with the weather data. This dashboard has the same filtering methods as the main dashboard, however the date range of 2018-2019 was selected. Both the number of cycling journeys undertaken and the average maximum/minimum temperatures for the docking stations follows a very similar pattern. It is probable that customers are less likely to travel by bike when the weather is poor. 
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/tree/main/assets/weather_integration.png" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/weather_integration.png?raw=true" />
 </p>
 
 For further information about the dashboards, see [the docs](docs/6_data_visualisation.md).
@@ -47,7 +47,7 @@ For further information about the dashboards, see [the docs](docs/6_data_visuali
 The database was constructed in BigQuery, which is ideal for storing and querying large datasets. The database was designed with a star schema-like design, where the journeys are stored in a fact-like table which relates to lots of other dimensions (e.g. location information, weather). It is simple to join the journeys table to tables containing other information using the relationships demonstrated in the schema below:
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/tree/main/assets/main_relations.drawio.png" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/main_relations.drawio.png?raw=true" />
 </p>
 
 The weather data is also stored such that it has an ID (`timestamp_id`) referencing the ID of the timestamp table and an ID (`location_id`) referencing the ID of the locations table. However, the intention is that the weather table be joined on to the journeys table directly and that joins between weather and other tables should be avoided.
@@ -61,7 +61,7 @@ For further information about the database construction and structure, see [the 
 The pipeline uses a set of directed acyclic graphs (DAGs), defined in [`airflow/dags`](airflow/dags/), to schedule the weekly retrieval of cycle journey data and monthly ingestion of weather data. There are three types of weather data ingested, each from a different source. The DAG for rainfall is shown below:
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/tree/main/assets/dags/ingest_rainfall_weather.png" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/dags/ingest_rainfall_weather.png?raw=true" />
 </p>
 
 The data is downloaded and ingested to CSV. This involves converting the data from netCDF format and filtering such that only data for the relevant locations is stored. The data can then be converted to parquet format before being uploaded to the GCS.
@@ -69,7 +69,7 @@ The data is downloaded and ingested to CSV. This involves converting the data fr
 As new data is ingested and stored, it must be transformed and loaded to the BigQuery database. Near the start of each month, the previous month's data is transformed/integrated and appended to BigQuery. The DAG for this is as follows:
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/tree/main/assets/dags/transform_load_journeys.png" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/dags/transform_load_journeys.png?raw=true" />
 </p>
 
 If there is not already a Dataproc cluster available, one is temporarily created for the purposes of submitting the spark job. The current spark script is also uploaded. A function is used to get the date range of the data that will be processed, before the spark job is submitted to process these data. 
