@@ -179,9 +179,9 @@ def create_weather_dag(weather_type):
         schedule_interval = "0 0 3 * *",  # Get previous month's data on the 3rd
         catchup = True,
         max_active_runs = 1,
-        tags = [weather_type],
+        tags = ["weather_digest", weather_type],
         start_date = datetime(2017, 1, 3),
-        end_date = datetime(2022, 2, 3),
+        end_date = datetime(2022, 1, 3),
         default_args = {
             "owner": "airflow",
             "depends_on_past": True,

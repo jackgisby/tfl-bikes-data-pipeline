@@ -1,5 +1,6 @@
 import logging
 from os import environ
+from json import load
 from datetime import datetime, date, timedelta
 
 from airflow import DAG
@@ -161,7 +162,7 @@ def format_to_csv(file_dir, file_name):
     return csv_file_name_without_spaces
 
 
-def format_to_parquet(csv_file_dir, csv_file_name):
+def format_to_parquet(csv_file_dir, csv_file_name, column_types=None):
     """
     Converts a CSV file to a parquet file. Parquet files are ideal because they allow for
     efficient data compression while allowing queries to read only the necessary columns.
@@ -177,14 +178,22 @@ def format_to_parquet(csv_file_dir, csv_file_name):
         raise TypeError("Can only convert CSV files to parquet")
 
     # Import here as we don't want to import at top of file for Airflow
-    from pyarrow.csv import read_csv
+    from pyarrow.csv import read_csv, ConvertOptions
     from pyarrow.parquet import write_table
 
     # Convert CSV to parquet
     parquet_file_name = csv_file_name.replace(".csv", ".parquet")
     logging.info(f"Parquetised dataset name: {parquet_file_name}")
 
-    write_table(read_csv(f"{csv_file_dir}/{csv_file_name}"), f"{csv_file_dir}/{parquet_file_name}")
+    # If given schema, give to pyarrow reader instead of inferring column types
+    if column_types is not None:
+        convert_options = ConvertOptions(column_types=column_types)
+    else:
+        convert_options = None
+
+    arrow_table = read_csv(f"{csv_file_dir}/{csv_file_name}", convert_options=convert_options)
+    
+    write_table(arrow_table, f"{csv_file_dir}/{parquet_file_name}")
 
     return parquet_file_name
 
@@ -242,7 +251,7 @@ with DAG(
     schedule_interval = "0 23 * * 2",  # Every week
     catchup = True,
     max_active_runs = 3,
-    tags = ["bike_usage"],
+    tags = ["tfl_digest", "bike_usage"],
     start_date = datetime(2017, 3, 3, 20),
     end_date = datetime(2022, 1, 4, 20),  
     default_args = {
@@ -302,13 +311,25 @@ with DAG(
                         """
     )
 
+    # get_table_schema = PythonOperator(
+    #     task_id = "get_table_schema",
+    #     python_callable = get_table_schema,
+    #     op_kwargs = {
+    #         "schema_json_file": f"{AIRFLOW_HOME}/schema/rental_schema.json"
+    #     }
+    # )
+
+    # column_types = "{{ ti.xcom_pull(task_ids='get_table_schema') }}"
+    # logging.info(f"Pulled schema: {column_types}")
+
     # We convert to the columnar parquet format for upload to GCS
     convert_to_parquet = PythonOperator(
         task_id = "convert_to_parquet",
         python_callable = format_to_parquet,
         op_kwargs = {
             "csv_file_dir": AIRFLOW_HOME,
-            "csv_file_name": csv_file_name
+            "csv_file_name": csv_file_name,
+            "column_types": load(open(f"{AIRFLOW_HOME}/schema/journey_schema.json", "r"))
         }
     )
 
@@ -334,7 +355,7 @@ with DAG(
     schedule_interval = "0 0 1 * *",
     catchup = False,
     max_active_runs = 1,
-    tags = ["bike_locations"],
+    tags = ["tfl_digest", "bike_locations"],
     start_date = datetime(2017, 2, 1),
     default_args = {
         "owner": "airflow",
@@ -383,5 +404,5 @@ with DAG(
         dst = f"locations_data/{parquet_file_name}",
         bucket = GCP_GCS_BUCKET
     )
-
+    
     download_file_from_https >> convert_from_xml >> convert_to_parquet  >> transfer_data_to_gcs
