@@ -147,11 +147,11 @@ with DAG(
     schedule_interval = "@once",  # One-time setup
     catchup = False,
     max_active_runs = 1,
-    tags = ["create_warehouse"],
+    tags = ["spark_setup", "create_warehouse"],
     start_date = days_ago(1),
     default_args = {
         "owner": "airflow",
-        "depends_on_past": True,
+        "depends_on_past": False,
         "retries": 0,
     }
 ) as setup_bigquery:
@@ -188,10 +188,14 @@ with DAG(
     create_bigquery_dataset >> create_dim_weather
 
     # Tables are ready now, so we can upload the pyspark file and submit it to dataproc
-    upload_pyspark_file = get_pyspark_upload_task("setup_database.py")
+    upload_pyspark_file = get_pyspark_upload_task("transform_load.py")
 
     # All the dependencies are ready, submit the spark job
-    submit_dataproc_spark_job_task = get_cluster_job_submission_task("setup_database.py")
+    submit_dataproc_spark_job_task = get_cluster_job_submission_task(
+        "transform_load.py", 
+        additional_arguments = ["", "setup_database"]
+    )
+
     upload_pyspark_file >> submit_dataproc_spark_job_task
     create_fact_journey >> submit_dataproc_spark_job_task
     create_dim_rental >> submit_dataproc_spark_job_task
@@ -205,47 +209,57 @@ with DAG(
         create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
 
 
-with DAG(
-    dag_id = "spark_transform_load",
-    schedule_interval = "0 0 10 * *",  # Transform/load previous month's data on the 10th
-    catchup = True,
-    max_active_runs = 1,
-    tags = ["update_warehouse"],
-    start_date = datetime(2017, 1, 10),
-    end_date = datetime(2017, 2, 10),  # datetime(2022, 1, 10)
-    default_args = {
-        "owner": "airflow",
-        "depends_on_past": False,
-        "retries": 0,
-    }
-) as spark_transform_load:
+def create_transform_dag(dag_id, day_of_month=10):
 
-    upload_pyspark_file = get_pyspark_upload_task("transform_load.py")
-
-    # Get the month (in YYYYMM format) of the current DAG run
-    get_previous_month = PythonOperator(
-        task_id = "get_previous_month",
-        python_callable = get_previous_month_as_yyyymm
+    transform_dag = DAG(
+        dag_id = dag_id,
+        schedule_interval = f"0 0 {day_of_month} * *",  # Transform/load previous month's data on the 10th
+        catchup = True,
+        max_active_runs = 1,
+        tags = ["spark_transform", "update_warehouse", "journey_data"],
+        start_date = datetime(2017, 1, day_of_month),  # datetime(2017, 1, day_of_month)
+        end_date = datetime(2022, 1, day_of_month),
+        default_args = {
+            "owner": "airflow",
+            "depends_on_past": True,
+            "retries": 0
+        }
     )
+    
+    with transform_dag:
 
-    data_date = "{{ ti.xcom_pull(task_ids='get_previous_month') }}"
-    logging.info(f"YYYYMM: {data_date}")
+        upload_pyspark_file = get_pyspark_upload_task("transform_load.py")
 
-    # Submit dataproc job with an additional argument: 
-    # The year and month ("YYYYMM") of the data to be transformed and loaded
-    # If this is the first time running this DAG, use overwrite mode for BigQuery
-    submit_dataproc_spark_job_task = get_cluster_job_submission_task(
-        "transform_load.py", 
-        additional_arguments = [data_date]
-    )
+        # Get the month (in YYYYMM format) of the current DAG run
+        get_previous_month = PythonOperator(
+            task_id = "get_previous_month",
+            python_callable = get_previous_month_as_yyyymm
+        )
 
-    # These are the dependencies of the dataproc job
-    upload_pyspark_file >> submit_dataproc_spark_job_task
-    get_previous_month >> submit_dataproc_spark_job_task
+        data_date = "{{ ti.xcom_pull(task_ids='get_previous_month') }}"
+        logging.info(f"YYYYMM: {data_date}")
 
-    # If the dataproc cluster has not already been created, we can set
-    # it up and tear it down before and after submitting the job, respectively
-    if CREATE_INFRASTRUCTURE:
-        create_cluster = get_cluster_setup_task()
-        delete_cluster = get_cluster_teardown_task()
-        create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
+        # Submit dataproc job with an additional argument: 
+        # The year and month ("YYYYMM") of the data to be transformed and loaded
+        # If this is the first time running this DAG, use overwrite mode for BigQuery
+        submit_dataproc_spark_job_task = get_cluster_job_submission_task(
+            "transform_load.py", 
+            additional_arguments = [data_date, dag_id]
+        )
+
+        # These are the dependencies of the dataproc job
+        upload_pyspark_file >> submit_dataproc_spark_job_task
+        get_previous_month >> submit_dataproc_spark_job_task
+
+        # If the dataproc cluster has not already been created, we can set
+        # it up and tear it down before and after submitting the job, respectively
+        if CREATE_INFRASTRUCTURE:
+            create_cluster = get_cluster_setup_task()
+            delete_cluster = get_cluster_teardown_task()
+            create_cluster >> submit_dataproc_spark_job_task >> delete_cluster
+
+    return transform_dag
+
+
+transform_load_weather = create_transform_dag("transform_load_weather", 9)
+transform_load_journeys = create_transform_dag("transform_load_journeys", 10)
