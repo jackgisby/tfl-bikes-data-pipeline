@@ -1,0 +1,1 @@
+{"Rental_Id": "string", "Duration": "string", "Bike_Id": "string", "End_Date": "string", "EndStation_Id": "string", "EndStation_Name": "string", "Start_Date": "string", "StartStation_Id": "string", "StartStation_Name": "string"}

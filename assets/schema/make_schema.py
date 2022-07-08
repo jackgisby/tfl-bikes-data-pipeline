@@ -37,6 +37,21 @@ def main():
 
     json.dump(rental_schema, open("assets/schema/rental_schema.json", "w"))
 
+    # Load raw data in as strings because the formatting is incorrect
+    journey_schema = {
+        "Rental_Id": "string",
+        "Duration": "string",
+        "Bike_Id": "string",
+        "End_Date": "string",
+        "EndStation_Id": "string",
+        "EndStation_Name": "string",
+        "Start_Date": "string",
+        "StartStation_Id": "string",
+        "StartStation_Name": "string"
+    }
+
+    json.dump(journey_schema, open("assets/schema/journey_schema.json", "w"))
+
 
 if __name__ == "__main__":
     main()
