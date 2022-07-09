@@ -42,7 +42,7 @@ StartStation Name | String | The name of the origin station
 
 # Weather data
 
-Each row in the weather dataset represents a weather observation for a particular day in a particular location. These datasets contain observations for each point in a 1km by 1km grid across the UK. The data is stored in netCDF format, which contains tables describing the latitude, longitude and time of each data point. 
+Each row in the weather dataset represents a weather observation for a particular day in a particular location. These datasets contain observations for each point in a 1km by 1km grid across the UK. The data is [stored in netCDF format](https://catalogue.ceda.ac.uk/uuid/4dc8450d889a491ebb20e724debe2dfb), which contains tables describing the latitude, longitude and time of each data point. 
 
 The weather variables we use are as follows:
 - Daily __rainfall__ (mm)
