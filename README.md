@@ -48,7 +48,7 @@ For further information about the dashboards, see [the docs](docs/4_data_visuali
 
 ## Database
 
-The database was constructed in BigQuery, which is ideal for storing and querying large datasets. The database was designed with a star schema-like design, where the journeys are stored in a fact-like table which relates to lots of other dimensions (e.g. location information, weather). It is simple to join the journeys table to tables containing other information using the relationships demonstrated in the schema below:
+The database was constructed in BigQuery, which is ideal for storing and querying large datasets. The database was designed with a star schema-like design, where the journeys are stored in a fact-like (or "fact-less") table which relates to lots of other dimensions (e.g. location information, weather). It is simple to join the journeys table to tables containing other information using the relationships demonstrated in the schema below:
 
 <p align="center">
   <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/main_relations.drawio.png?raw=true" />
