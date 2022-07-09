@@ -85,10 +85,9 @@ For more information about the workflow scheduling or to view the other DAGs, se
 For a more detailed explanation of the pipeline and instructions on how to setup the pipeline yourself, refer to the following documents:
 
 1. [Setup](docs/1_setup.md)
-4. [Data ingestion](docs/2_data_ingestion.md)
-5. [Data transformation](docs/3_data_transformation.md)
-6. [Data visualisation](docs/4_data_visualisation.md)
-7. [Automated testing](docs/5_automated_testing.md)
+2. [Data ingestion](docs/2_data_ingestion.md)
+3. [Data transformation](docs/3_data_transformation.md)
+4. [Data visualisation](docs/4_data_visualisation.md)
 
 We also provide a [more detailed description of the datasets](docs/data_sources.md) processed by the pipeline and a [discussion of the limitations and future directions](docs/limitations_and_directions.md) of the pipeline.
 

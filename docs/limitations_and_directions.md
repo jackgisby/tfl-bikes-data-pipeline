@@ -33,7 +33,7 @@ There are no formal checks run as part of the pipeline to ensure that the data i
 
 ## Automated testing
 
-
+Unit and integration testing would be useful for testing DAGs and the spark pipeline. Automated testing could be implemented with continous integration to ensure that updates to the workflow do not break existing functionality.
 
 # Other
 
