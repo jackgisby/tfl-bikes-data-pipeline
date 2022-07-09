@@ -32,6 +32,9 @@ def get_column_types_from_df(df, show_num_null=True):
     Prints the column types of a spark dataframe to logger.
 
     :param df: A spark RDD.
+
+    :param show_num_null: If True, prints the number of `Null` values for each
+        column in `df`.
     """
 
     # Log the datatype of each column
@@ -46,7 +49,7 @@ def get_column_types_from_df(df, show_num_null=True):
 
 def send_to_bigquery(df, additional_options=None, mode="append"):
     """
-    Sends a spark RDD to BigQuery to create a new table. 
+    Sends a spark RDD to BigQuery to create a new table, or append to an existing table.
 
     :param df: A spark RDD to be uploaded to BigQuery.
 
@@ -71,9 +74,11 @@ def send_to_bigquery(df, additional_options=None, mode="append"):
         .option("project", GCP_PROJECT_ID) \
         .option("dataset", BIGQUERY_DATASET) 
 
+    # Add additional options passed to the function
     for option_name, option_value in additional_options.items():
         df = df.option(option_name, option_value)
 
+    # Send to BigQuery
     df = df.save()
 
 
@@ -84,15 +89,16 @@ def get_timestamp_dimension(spark):
 
     :param spark: A SparkSession object.
 
-    :return: A Spark RDD containing the table.
+    :return: A Spark RDD containing the timestamp dimension table.
     """
 
     # Create date dimension table
     begin_timestamp, end_timestamp = "2016-01-01 00:00", "2022-01-31 23:59"
 
-    # Creates a timestamp dimension with the unix_timestamp as the key
+    # Sequence is used to create a timestamp dimension with the unix_timestamp as the key
     timestamp_seq = f"sequence(to_timestamp('{begin_timestamp}'), to_timestamp('{end_timestamp}'), interval 1 minute)"
 
+    # Create the table, including new time-related columns
     df = spark \
         .createDataFrame([(1,)], ["c"]) \
         .withColumn("timestamp", F.explode(F.expr(timestamp_seq))) \
@@ -108,7 +114,6 @@ def get_timestamp_dimension(spark):
     # Log timestamp dimension details
     logger.debug("Timestamp dimension: ")
     df.show()
-
     get_column_types_from_df(df)
 
     return df
@@ -125,14 +130,14 @@ def get_locations_data(spark, file_name):
     :return: Returns the locations data as a spark dataframe.
     """
 
-    df = spark.read.parquet(file_name) \
-        .withColumnRenamed("terminalName", "terminal_name")
+    df = spark.read.parquet(file_name).withColumnRenamed("terminalName", "terminal_name")
 
+    # Log information about the raw table
     logger.info("Raw imported locations data:")
     df.show()
-
     get_column_types_from_df(df)
 
+    # Convert to integers
     for id_col in ("id", "terminal_name"):
         df = df.withColumn(id_col, F.col(id_col).cast("int"))
 
@@ -140,8 +145,10 @@ def get_locations_data(spark, file_name):
     df = df.withColumn("lat", F.col("lat").cast("decimal(8, 6)")) \
            .withColumn("long", F.col("long").cast("decimal(9, 6)"))
 
+    # Log the modified RDD
     logger.info("Reformatted imported locations data:")
     df.show()
+    get_column_types_from_df(df)
 
     return df
 
@@ -150,10 +157,9 @@ def get_usage_data(spark, file_name):
     """ 
     Extract data from the journey/usage files converted to parquet from the TfL portal. 
 
-    The journey data has its variables transformed before being split into three tables. The
+    The journey data has its variables transformed before being split into two tables. The
     key table is the "journey" fact table. An additional table "rental" is created, with 
-    information on each bike rental (using the rental_id key). Another table, timestamp,
-    is created which uses the unix timestap as a key.
+    information on each bike rental (using the rental_id key).
     
     :param spark: A SparkSession object.
 
@@ -176,6 +182,7 @@ def get_usage_data(spark, file_name):
     for old_column, new_column in zip(old_columns, new_columns):
         df = df.withColumnRenamed(old_column, new_column)
 
+    # Log RDD information post-renaming
     logger.info("Loaded parquet after column renaming:")
     logger.info("Renamed columns: " + str(df.schema.names))
     df.show()
@@ -191,6 +198,7 @@ def get_usage_data(spark, file_name):
                            F.unix_timestamp(f"{date_col}_timestamp").alias(f"{date_col}_timestamp_id")
                            )
 
+    # Convert the following columns to integers
     int_cols = [
         "rental_id", "duration", "bike_id", "end_station_id", 
         "start_station_id", "start_timestamp_id", "end_timestamp_id"
@@ -199,6 +207,7 @@ def get_usage_data(spark, file_name):
     for id_col in int_cols:
         df = df.withColumn(id_col, F.col(id_col).cast("int"))
 
+    # Log the changes after type changes
     logger.info("Fact/rental table after type changes: ")
     df.show()
     get_column_types_from_df(df)
@@ -213,6 +222,7 @@ def get_usage_data(spark, file_name):
         "end_timestamp_id", "start_timestamp", "end_timestamp"
     )
     
+    # Log information about the final fact table
     logger.info("fact_journey: " + str(fact_journey.schema.names))
     fact_journey.show()
 
@@ -230,13 +240,8 @@ def get_weather_data(spark, file_name, month_year):
         this directory are three subfolders, each containing parquet files relating to a 
         different type of weather data (rainfall, minimum temp, maximum temp).
 
-    :param fact_journey: A table containing information on each journey. This is the 
-        fact table, so we will create a new key within this table relating it to the 
-        weather table.
-
-    :param timestamp_dimension: A table containing a mapping of timestamp IDs 
-        (unix timestamps) to time-related variables such as year, month and day. 
-        Used to join the `fact_journey` and `dim_weather` tables.
+    :param month_year: A string in the format "YYYYMM" that indicates the year and month
+        of the dataset to be processed. Used to find the data in GCS.
 
     :return: Returns the weather data as a spark dataframe and a modified version of 
         the input table `fact_journey` which contains a new key relating it to the 
@@ -271,6 +276,7 @@ def get_weather_data(spark, file_name, month_year):
         .withColumn("id", F.concat_ws("_", F.col("location_id"), F.col("timestamp_id"))) \
         .select("id", "location_id", "timestamp_id", "timestamp", "rainfall", "tasmin", "tasmax") 
 
+    # Log information about the final weather table
     logger.info("Modified weather dataframe: ")
     print(weather_dimension.show())
     get_column_types_from_df(weather_dimension)
@@ -279,7 +285,26 @@ def get_weather_data(spark, file_name, month_year):
 
 
 def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension):
-    "Creates an ID in the fact table relating to the weather dimension table."
+    """
+    Creates an ID in the fact table relating to the weather dimension table.
+
+    :param spark: A SparkSession object.
+
+    :param fact_journey: A table containing information on each journey. This is the 
+        fact table, so we will create a new key within this table relating it to the 
+        weather table.
+
+    :param weather_dimension: A table containing weather variables for each day for
+        each cycle station. Will be joined to the `fact_journey` table in order to
+        add the ID of the `weather_dimension` table.
+
+    :param timestamp_dimension: A table containing a mapping of timestamp IDs 
+        (unix timestamps) to time-related variables such as year, month and day. 
+        Used to join the `fact_journey` and `dim_weather` tables.
+    
+    :return: Returns the `fact_journey` table with additional columns for the "start"
+        and "end" weather IDs. 
+    """
 
     # Get a version of the timestamp dimension table with the required columns for making the joins
     timestamp_dimension \
@@ -287,7 +312,7 @@ def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension)
         .withColumnRenamed("id", "timestamp_id") \
         .createOrReplaceTempView("timestamp_dimension_to_join")
 
-    # Join weather data to time for joining with the fact table
+    # Join weather data to the time table to prepare for joining with the fact table
     weather_dimension \
         .withColumnRenamed("id", "weather_id") \
         .createOrReplaceTempView("weather_dimension_to_join")
@@ -315,10 +340,12 @@ def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension)
     fact_journey.createOrReplaceTempView("start_fact_journey")
     fact_journey.createOrReplaceTempView("end_fact_journey")
 
+    # Join the weather data twice, once for each end of the journey
     for journey_side in ("start", "end"):
 
         logger.info(f"Getting weather ID for {journey_side} location")
 
+        # Join the tables
         spark.sql(f"""
             SELECT *
             FROM {journey_side}_fact_journey AS fj
@@ -337,9 +364,11 @@ def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension)
                 AND fjtj.{journey_side}_station_id = wdt.location_id
         """)
 
+        # Rename the weather ID to indicate the side of the journey that was joined
         fact_journey_weather_joined = fact_journey_weather_joined \
             .withColumnRenamed("weather_id", f"{journey_side}_weather_id")
 
+        # Log the joined tables
         logger.info(f"{journey_side} journey data joined to the weather dimension: ")
         fact_journey_weather_joined.show()
  
@@ -347,10 +376,12 @@ def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension)
         fact_journey_weather_joined = fact_journey_weather_joined \
             .select(*(fact_cols_to_keep + [f"{journey_side}_weather_id"]))
         
+        # Log the selected table and create an SQL view
         logger.info(f"Fact table joined to weather by {journey_side} location: ")
         fact_journey_weather_joined.show()
         fact_journey_weather_joined.createOrReplaceTempView(f"{journey_side}_fact_journey_with_weather_id")
 
+    # Join the tables together to get both the start and end weather IDs
     fact_journey_with_weather_id = spark.sql("""
         SELECT *
         FROM start_fact_journey_with_weather_id AS fjs
@@ -364,10 +395,10 @@ def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension)
 def setup_database(spark):
     "Workflow for setting up BigQuery prior to main transformation steps."
 
-    # Get data from parquet and process
+    # Create a table containing information on time
     timestamp_dimension = get_timestamp_dimension(spark)
 
-    # Create table with partitioning by month
+    # Send to BigQuery with partitioning by month
     send_to_bigquery(
         timestamp_dimension, 
         additional_options = {
@@ -378,7 +409,7 @@ def setup_database(spark):
         mode = "overwrite"
     )
 
-    # Get data from parquet, process and create bigquery table from it
+    # Get location data from parquet, process and create bigquery table from it
     locations_dimension = get_locations_data(spark, f"gs://{GCP_GCS_BUCKET}/locations_data/livecyclehireupdates.parquet")
     send_to_bigquery(locations_dimension, {"table": "dim_locations"}, mode = "overwrite")
 
@@ -398,6 +429,7 @@ def transform_load_weather(spark):
     # Else, append the data to the existing tables
     write_mode = "overwrite" if MONTH_YEAR == "201612" else "append"
 
+    # Create/update tables with partitioning by month
     send_to_bigquery(
         weather_dimension, 
         additional_options = {
@@ -456,7 +488,8 @@ def transform_load_journeys(spark):
     write_mode = "overwrite" if MONTH_YEAR == "201612" else "append"
 
     send_to_bigquery(rental_dimension, {"table": "dim_rental"}, mode = write_mode)
-
+    
+    # Create/update tables with partitioning by month
     send_to_bigquery(
         fact_journey, 
         additional_options = {
