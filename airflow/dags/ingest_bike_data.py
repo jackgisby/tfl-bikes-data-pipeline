@@ -20,15 +20,15 @@ AIRFLOW_HOME = environ.get("AIRFLOW_HOME", "/opt/airflow/")
 
 def get_start_date_from_time(execution_date):
     """
-    Gets the start date of the extracted data range
+    Gets the start date of the extracted data range. 
 
-    :param execution_date: Date of scheduled airflow run. A datetime object is automatically passed to 
-        this argument by airflow
+    :param execution_date: Date of scheduled airflow run. A datetime object is 
+        automatically passed to this argument by airflow
 
     :return: Date in "YYYYMM" format.
     """
 
-    # Some weeks have +1 or -1 days
+    # Some weeks have +1 or -1 days, so adjust for this
     if execution_date.date() == date(2017, 8, 22):
         days = 7
 
@@ -52,8 +52,8 @@ def get_usage_file_names_from_time(execution_date):
 
     Some datasets have inconsistent names, and some are not even saved as CSV.
 
-    :param execution_date: Date of scheduled airflow run. A datetime object is automatically passed to 
-        this argument by airflow
+    :param execution_date: Date of scheduled airflow run. A datetime object is 
+        automatically passed to this argument by airflow
     
     :return: The formatted file name for the airflow run"s time period as a string
         and the dataset start date in "YYYYMM" format.
@@ -171,6 +171,9 @@ def format_to_parquet(csv_file_dir, csv_file_name, column_types=None):
 
     :param csv_file_name: The name of the CSV file to be converted.
 
+    :param column_types: If given, specifies the schema of the parquet file
+        to be written.
+
     :return: The name of the parquet file, saved within `csv_file_dir`.
     """
 
@@ -202,7 +205,11 @@ def reformat_locations_xml(xml_file_dir, xml_file_name):
     """
     Converts a live XML corresponding to bike locations and extracts relevant data fields.
 
+    :param xml_file_dir: The directory in which the XML file to be processed is stored.
+
     :param xml_file_name: The name of the XML file to be processed.  
+
+    :return: The name of the CSV file saved within `xml_file_dir`. 
     """
 
     if not xml_file_name.lower().endswith(".xml"):
@@ -252,7 +259,7 @@ with DAG(
     catchup = True,
     max_active_runs = 3,
     tags = ["tfl_digest", "bike_usage"],
-    start_date = datetime(2017, 3, 3, 20),
+    start_date = datetime(2017, 1, 3, 20),
     end_date = datetime(2022, 1, 4, 20),  
     default_args = {
         "owner": "airflow",
@@ -260,6 +267,13 @@ with DAG(
         "retries": 0
     }
 ) as ingest_bike_usage:
+    """
+    This DAG ingests the primary dataset from TfL. Currently, it is specified to
+    run from the start of 2017 until the start of 2022. The DAG runs weekly to get
+    the most recent data, and moves them to the GCS. The data is released on Tuesdays.
+
+    See `docs/data_sources.md` for more information on the external dataset.
+    """
 
     # Need to get the start date to save the output to the correct GCS folder
     get_start_date = PythonOperator(
@@ -302,25 +316,16 @@ with DAG(
     logging.info(f"Pulled CSV name: {csv_file_name}")
 
     # Remove spaces from file header
+    new_header = "Rental_Id,Duration,Bike_Id,End_Date,EndStation_Id,EndStation_Name,Start_Date,StartStation_Id,StartStation_Name"
+
     convert_csv_header = BashOperator(
         task_id = "convert_csv_header",
-        bash_command = f"""new_header='Rental_Id,Duration,Bike_Id,End_Date,EndStation_Id,EndStation_Name,Start_Date,StartStation_Id,StartStation_Name'
+        bash_command = f"""new_header='{new_header}'
                            sed -i "1s/.*/$new_header/" {AIRFLOW_HOME}/{csv_file_name}
                            head {AIRFLOW_HOME}/{csv_file_name}
                            tail {AIRFLOW_HOME}/{csv_file_name}
                         """
     )
-
-    # get_table_schema = PythonOperator(
-    #     task_id = "get_table_schema",
-    #     python_callable = get_table_schema,
-    #     op_kwargs = {
-    #         "schema_json_file": f"{AIRFLOW_HOME}/schema/rental_schema.json"
-    #     }
-    # )
-
-    # column_types = "{{ ti.xcom_pull(task_ids='get_table_schema') }}"
-    # logging.info(f"Pulled schema: {column_types}")
 
     # We convert to the columnar parquet format for upload to GCS
     convert_to_parquet = PythonOperator(
@@ -345,6 +350,7 @@ with DAG(
         bucket = GCP_GCS_BUCKET
     )
 
+    # Setup dependencies
     get_file_names >> download_file_from_https >> convert_to_csv >> convert_csv_header
     convert_csv_header >> convert_to_parquet >> transfer_data_to_gcs
     get_start_date >> transfer_data_to_gcs
@@ -363,14 +369,24 @@ with DAG(
         "retries": 0
     }
 ) as ingest_bike_locations:
+    """
+    This DAG extracts static location information from a live data source. We 
+    extract data monthly to make sure we have the up-to-date cycle station 
+    information, but we don't extract the live fields.
 
+    See `docs/data_sources.md` for more information on the external dataset.
+    """
+
+    # The name of the live dataset file to ingest
+    # We could give this as a parameter to the DAG instead
     xml_file_name = "livecyclehireupdates.xml"
-    
+    xml_file_url = "https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/"
+
     # The live dataset is downloaded as an XML
     # We only extract the static data concerning the bike pickup/dropoff locations
     download_file_from_https = BashOperator(
         task_id = "download_file_from_https",
-        bash_command = f"curl -sSLf 'https://tfl.gov.uk/tfl/syndication/feeds/cycle-hire/{xml_file_name}' > {AIRFLOW_HOME}/{xml_file_name}"
+        bash_command = f"curl -sSLf '{xml_file_url}{xml_file_name}' > {AIRFLOW_HOME}/{xml_file_name}"
     )
 
     # Data is an XML, so we extract the desired fields into a CSV
@@ -405,4 +421,5 @@ with DAG(
         bucket = GCP_GCS_BUCKET
     )
     
+    # Setup dependencies
     download_file_from_https >> convert_from_xml >> convert_to_parquet  >> transfer_data_to_gcs

@@ -114,6 +114,9 @@ def reformat_netcdf(file_name, weather_type):
 
     :param file_name: The file name of the .nc file to be converted.
 
+    :param weather_type: The name of the weather variable (e.g. rainfall, tasmin
+        , tasmax) to be extracted. 
+
     :return: The name of the created CSV file.
     """
     
@@ -151,7 +154,10 @@ def reformat_netcdf(file_name, weather_type):
         euclidean_dist = np.sqrt(lat_diff ** 2 + long_diff ** 2)
 
         # Pick the index with the smallest distance to the location in the weather dataset
-        y_coord, x_coord = np.unravel_index(np.argmin(euclidean_dist), nc_data.variables["latitude"][:].shape)
+        y_coord, x_coord = np.unravel_index(
+            np.argmin(euclidean_dist), 
+            nc_data.variables["latitude"][:].shape
+        )
 
         # Get the measurements for each day for these coordinates
         location_measurements = nc_data.variables[weather_type][:, y_coord, x_coord]
@@ -173,6 +179,17 @@ def reformat_netcdf(file_name, weather_type):
 
 
 def create_weather_dag(weather_type):
+    """
+    Creates a DAG for extracting a weather variable from the CEDA Archive FTP
+    server. The DAG runs on the 3rd day of each month, and ingests the weather
+    data for the previous month. The function can create a DAG for any of the
+    weather variables, including "rainfall", "tasmin" and "tasmax". 
+
+    :param weather_type: The name of the weather variable (e.g. rainfall, tasmin
+        , tasmax) to be extracted. 
+
+    :return: A DAG for ingesting the weather data.
+    """
 
     ingest_weather_data = DAG(
         dag_id = f"ingest_{weather_type}_weather",
@@ -279,6 +296,7 @@ def create_weather_dag(weather_type):
     return ingest_weather_data
 
 
+# Create the DAG for each weather variable
 rainfall_dag = create_weather_dag("rainfall")
 tasmax_dag = create_weather_dag("tasmax")
 tasmin_dag = create_weather_dag("tasmin")

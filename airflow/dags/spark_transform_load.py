@@ -32,7 +32,12 @@ CREATE_INFRASTRUCTURE = environ.get("CREATE_INFRASTRUCTURE", "True").lower() in 
 
 
 def get_cluster_setup_task():
-    "Creates a lightweight `DataprocCreateClusterOperator` task based on GCP variables."
+    """
+    Creates a `DataprocCreateClusterOperator` task for creating a lightweight Dataproc 
+    cluster based on GCP variables.
+
+    :return: A `DataprocCreateClusterOperator` task.
+    """
 
     return DataprocCreateClusterOperator(
         task_id = "create_cluster",
@@ -84,7 +89,13 @@ def get_cluster_job_submission_task(file_name, additional_arguments=None):
 
 
 def get_cluster_teardown_task():
-    "Destroys a cluster using a `DataprocDeleteClusterOperator` task."
+    """
+    Destroys a cluster using a `DataprocDeleteClusterOperator` task. The trigger
+    rule is set to "all_done", meaning it will be carried out even if the PySpark
+    job fails.
+
+    :return: A `DataprocDeleteClusterOperator` task.
+    """
 
     return DataprocDeleteClusterOperator(
         task_id = "delete_cluster",
@@ -155,6 +166,19 @@ with DAG(
         "retries": 0,
     }
 ) as setup_bigquery:
+    """
+    Creates a DAG for setting up BigQuery. Creates a BigQuery dataset before
+    creating tables for each of the datasets. Empty tables are created for the
+    datasets that will be ingested by the "transform_dag". Complete tables are
+    created for the location data and timestamp table.
+
+    The DAG runs a single time, after which data just needs to be appended to the 
+    tables as it is released, using the "transform_dag" DAG. 
+
+    If the `CREATE_INFRASTRUCTURE` variable is True, tasks are created before
+    and after the Dataproc PySpark job submission to setup and teardown a
+    Dataproc cluster. 
+    """
 
     # Create the empty BigQuery dataset
     create_bigquery_dataset = BigQueryCreateEmptyDatasetOperator(
@@ -196,6 +220,7 @@ with DAG(
         additional_arguments = ["", "setup_database"]
     )
 
+    # Set dependencies for submit_dataproc_spark_job_task
     upload_pyspark_file >> submit_dataproc_spark_job_task
     create_fact_journey >> submit_dataproc_spark_job_task
     create_dim_rental >> submit_dataproc_spark_job_task
@@ -210,6 +235,23 @@ with DAG(
 
 
 def create_transform_dag(dag_id, day_of_month=10):
+    """
+    Creates a DAG for processing either weather or journey data.
+
+    If the `CREATE_INFRASTRUCTURE` variable is True, tasks are created before
+    and after the Dataproc PySpark job submission to setup and teardown a
+    Dataproc cluster. 
+
+    :param dag_id: This argument is passed as an argument to the PySpark script,
+        it dictates the behaviour of the workflow. A value of "transform_load_weather"
+        means that the workflow will transform the weather data and load it to BigQuery,
+        a value of "transform_load_journeys" does the same for the journeys data.
+
+    :param day_of_month: The day of the month on which to perform the DAG. The DAG
+        will run every month on this day. 
+
+    :return: Returns a DAG for transforming either weather or journey data.
+    """
 
     transform_dag = DAG(
         dag_id = dag_id,
@@ -261,5 +303,9 @@ def create_transform_dag(dag_id, day_of_month=10):
     return transform_dag
 
 
-transform_load_weather = create_transform_dag("transform_load_weather", 9)
-transform_load_journeys = create_transform_dag("transform_load_journeys", 10)
+# The journeys data depends on the weather data being transformed, so we perform the
+# journeys data transformation the day after the weather data. The transform/load 
+# steps are performed after ~10 days into the month to ensure that the final week of
+# the previous month's journeys data has been digested to GCS.
+transform_load_weather = create_transform_dag("transform_load_weather", day_of_month=9)
+transform_load_journeys = create_transform_dag("transform_load_journeys", day_of_month=10)
