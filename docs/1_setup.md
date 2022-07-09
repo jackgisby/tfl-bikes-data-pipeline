@@ -33,7 +33,13 @@ The next step is to set up the environment from which Airflow will orchestrate t
 
 ## Install required packages
 
-On your local machine or VM, you must install Docker, Docker Compose and Terraform. The remaining dependencies will be installed within the container we will create for Airflow.
+On your local machine or VM, you must install Docker, Docker Compose and Terraform. The remaining dependencies will be installed within the container we will create for Airflow. 
+
+Of course, you must also download this repository, like so:
+```
+git clone https://github.com/jackgisby/tfl-bikes-data-pipeline.git
+cd tfl-bikes-data-pipeline
+```
 
 ## Setup environment variables
 

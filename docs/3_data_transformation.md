@@ -40,5 +40,5 @@ Once the DAGs are activated, the BigQuery tables will be created and populated, 
 As discussed in the README, the database is intended to be used like a star schema, where tables are joined to the fact-like journeys table to perform various analyses. This is how the dashboards were created (see an example of joins being performed in `sql/make_view.sql`). There is also a natural relationship between the weather table and the timestamp table, and the weather table with the locations table. If one was primarily interested in weather, the locations and timestamp tables could be joined to the weather table in order to perform aggregations and analyses. However, this was not the intention of the schema design; in general, joins between tables other than "journeys" should be avoided.
 
 <p align="center">
-  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/dags/main_relations.drawio.png?raw=true" />
+  <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/main_relations.drawio.png?raw=true" />
 </p>

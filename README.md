@@ -7,13 +7,13 @@ This repository contains a batch processing pipeline that uses the Google Cloud 
 
 # Overview of the pipeline
 
-The pipeline is setup on GCP to ingest each dataset as it is released and perform a monthly transformation/integration in order to provide up-to-date data for performing analytics. In this README, an overview of the pipeline is provided; for further information, see the [docs](docs/). The project is designed as per the diagram, below. Airflow, hosted by Docker, is used to orchestrate the running of the pipeline. Ingestion to Google Cloud Storage (GCS) is carried out by Airflow as new data is released. Every month, Airflow creates a Spark job to transform and integrate the various data before appending the current month's data to BigQuery. Finally, Data Studio is used to visualise the database as a dashboard.
+The pipeline is setup on GCP to ingest each dataset as it is released and perform a monthly transformation/integration in order to provide up-to-date data for performing analytics. In this README, an overview of the pipeline is provided; for further information, see the [docs](docs/). The project is designed as per the diagram, below. Airflow, hosted by Docker, is used to orchestrate the running of the pipeline. Ingestion to Google Cloud Storage (GCS) is carried out by Airflow as new data is released. Every month, Airflow creates a Spark job to transform and integrate the various data before appending the current month's data to BigQuery. Finally, Data Studio is used to visualise the database as a dashboard. 
 
 <p align="center">
   <img src="https://github.com/jackgisby/tfl-bikes-data-pipeline/blob/main/assets/pipeline_structure.png?raw=true" />
 </p>
 
-The technologies in the diagram are also listed below:
+The technologies in the diagram are also listed below. The pipeline could have been simplified, however I wished to gain exposure to a set of new technologies and GCP.
 - __GCP:__ Various google cloud services were used, including GCS, Compute Engine, BigQuery, Dataproc and Data Studio. 
 - __Terraform:__ Terraform was used to manage GCP resources.
 - __Docker:__ Docker was used to host Airflow. 
