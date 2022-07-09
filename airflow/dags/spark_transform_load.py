@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+#
+# File specifying Airflow DAGs for running spark jobs on a GCP Dataproc cluster
+
 import logging
 from os import environ
 from datetime import datetime

@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+#
+# PySpark script that is used to transform/load data to BigQuery. The script runs
+# in three modes, depending on the fifth argument given to the script. The data
+# transformations are run depending on the fourth argument given to the script,
+# which specifies the month and year. Arguments 1-3 are used to determine the 
+# GCP project ID, bucket location and BigQuery dataset, respectively.
+
 import sys
 import logging
 from datetime import datetime
