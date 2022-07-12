@@ -401,7 +401,7 @@ def get_weather_ids(spark, fact_journey, weather_dimension, timestamp_dimension)
 
 
 def setup_database(spark):
-    "Workflow for setting up BigQuery prior to main transformation steps."
+    """ Workflow for setting up BigQuery prior to main transformation steps. """
 
     # Create a table containing information on time
     timestamp_dimension = get_timestamp_dimension(spark)
@@ -423,7 +423,7 @@ def setup_database(spark):
 
 
 def transform_load_weather(spark):
-    "Workflow for transforming and loading the weather data to BigQuery."
+    """ Workflow for transforming and loading the weather data to BigQuery. """
 
     # Create the weather dimension table from parquet files in the bucket
     weather_dimension = get_weather_data(
@@ -450,7 +450,7 @@ def transform_load_weather(spark):
 
 
 def transform_load_journeys(spark):
-    "Workflow for transforming and loading the journey data to BigQuery."
+    """ Workflow for transforming and loading the journey data to BigQuery. """
 
     # Get bike usage/journey data from parquet and process
     # Each file contains data for that month (by end date), so data is split into monthly folders (YYYYMM)
@@ -510,7 +510,7 @@ def transform_load_journeys(spark):
 
 
 def main():
-
+    
     # For debugging, use "local[*]" as master, for usage on GCP, use "yarn"
     spark = SparkSession \
         .builder \
