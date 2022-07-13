@@ -58,7 +58,7 @@ The weather data is also stored such that it has an ID (`timestamp_id`) referenc
 
 Since the data is uploaded in monthly intervals, and we expect analysts will only need to extract data for particular month ranges, we make use of partitioned BigQuery tables. A monthly partitioning is used for the journey, weather and timestamp tables.
 
-For further information about the database construction and structure, see [the docs](docs/3_data_transformation.md).
+For further information about the database construction and structure, see [the docs](docs/3_data_transformation.md). For examples of queries that can be made against the database, see [the following SQL file](sql/aggregations.sql).
 
 ## Scheduling
 
