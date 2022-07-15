@@ -23,17 +23,13 @@ Alternatively, we could move all the data processing to the PySpark job, which i
 
 Currently, the project requires some manual setup, including the creation of a GCP project, running Terraform to create infrastructure and activating the Docker containers in order to start the Airflow DAGs. In order to make changes to the project, you may need to re-start the Airflow instance and possibly make changes manually on GCP. Ideally, all of these steps would be automated along with testing and data quality checks. Some of these problems could be improved by using Cloud Composer to host Airflow, such that the DAGs can be automatically be deployed, tested and run on GCP. We could also use a service like GitHub Actions to automate the creation of GCP resources and the activation of DAGs on a virtual machine. 
 
+## Quality checks and testing
+
+Automated unit and integration testing would be useful for testing DAGs and the spark pipeline to ensure that updates to the workflow do not break existing functionality. Additionally, including extensive data quality checks/validation would have been useful. While there are some in-built checks within the pipeline, these do not encompass the entirety of the dataset. If data is not the expected type, it is likely to be picked up by the PySpark script, but lack of specific testing might make problems at this stage difficult to debug. 
+
 ## Logging
 
 There is already some logging integrated into the pipeline, although in some areas it is sparse. In certain DAGs and in the PySpark script, logging is employed to check the state of variables and identify how data has changed after transformation. However, the presence of logging is largely a function of the amount of time that was spent debugging that particular section. Ideally, the logging would be improved such that it covers a greater proportion of the pipeline and includes more information.
-
-## Quality checks
-
-There are no formal checks run as part of the pipeline to ensure that the data is consistent each week/month a new set of data is available. If data is not the expected type, it is likely to be picked up by the PySpark script, but lack of specific testing might make problems at this stage difficult to debug. 
-
-## Automated testing
-
-Unit and integration testing would be useful for testing DAGs and the spark pipeline. Automated testing could be implemented with continous integration to ensure that updates to the workflow do not break existing functionality.
 
 # Other
 
@@ -48,3 +44,11 @@ We currently have two forms of documentation:
 - Within `docs/` there is a holistic guide to the pipeline and how it may be run.
 
 Again, if we were to incorporate continous integration methodologies into the pipeline, we could potentially automate the generation of a cohesive document describing the pipeline and its individual components.
+
+## Weather data
+
+The spatial-resolution of the weather data may be more than is really necessary for the pipeline. It is unlikely that the weather at one end of a journey will be significantly different from that at the other. It might have been more efficient to collect the daily weather for the london average rather than including variables for every single cycle hub. 
+
+## Complexity
+
+The pipeline is quite complex considering the complexity of the problem being solved. I was interested in learning about Google Cloud and Airflow/Spark, so wished to include them. For instance, the pipeline could have been run without the cloud, using a local machine with high RAM. In this case, PostgreSQL could be used rather than BigQuery and spark/python jobs could have been scheduled to run locally rather than via Google Dataproc.
